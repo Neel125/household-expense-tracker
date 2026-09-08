@@ -64,4 +64,16 @@ export const api = {
     contribute: (id, amount) => http.post(`/api/goals/${id}/contribute`, { amount }),
     remove: (id) => http.del(`/api/goals/${id}`),
   },
+  investments: {
+    list: () => http.get('/api/investments'),
+    create: (data) => http.post('/api/investments', data),
+    update: (id, data) => http.put(`/api/investments/${id}`, data),
+    remove: (id) => http.del(`/api/investments/${id}`),
+  },
+  debts: {
+    list: () => http.get('/api/debts'),
+    create: (data) => http.post('/api/debts', data),
+    update: (id, data) => http.put(`/api/debts/${id}`, data),
+    remove: (id) => http.del(`/api/debts/${id}`),
+  },
 };

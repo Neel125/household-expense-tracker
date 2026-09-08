@@ -13,6 +13,7 @@ import AccountsPage from './pages/AccountsPage';
 import IncomePage from './pages/IncomePage';
 import BudgetsPage from './pages/BudgetsPage';
 import GoalsPage from './pages/GoalsPage';
+import PortfolioPage from './pages/PortfolioPage';
 import RewardsPage from './pages/RewardsPage';
 import FamilyPage from './pages/FamilyPage';
 import ProfilePage from './pages/ProfilePage';
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="income" element={<IncomePage />} />
           <Route path="budgets" element={<BudgetsPage />} />
           <Route path="goals" element={<GoalsPage />} />
+          <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="rewards" element={<RewardsPage />} />
           <Route path="tools" element={<ToolsLayout />}>
             <Route index element={<ToolsIndex />} />

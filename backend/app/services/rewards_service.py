@@ -28,9 +28,11 @@ from sqlmodel import Session
 from app.models import CoinTransaction, Transaction
 from app.repositories.repositories import (
     CategoryRepository,
+    DebtRepository,
     GoalRepository,
     HouseholdRepo,
     IncomeSourceRepository,
+    InvestmentRepository,
     TransactionRepository,
 )
 from app.services import month_math, reward_rules
@@ -38,9 +40,13 @@ from app.services.challenge_service import ChallengeService, ChallengeState
 from app.services.coin_ledger import CoinLedger
 from app.services.errors import NotFoundError, ValidationError
 from app.services.events import (
+    DEBT_COMPLETED,
     EXPENSE_DELETED,
     EXPENSE_TRACKED,
     GOAL_COMPLETED,
+    INVESTMENT_ADDED,
+    INVESTMENT_DELETED,
+    INVESTMENT_MATURED,
     DomainEvent,
     subscribe,
 )
@@ -94,6 +100,8 @@ class RewardsService:
         self.categories = CategoryRepository(session)
         self.income_sources = IncomeSourceRepository(session)
         self.goals = GoalRepository(session)
+        self.investments = InvestmentRepository(session)
+        self.debts = DebtRepository(session)
 
     # ------------------------------------------------------------- reactions
     def on_expense_tracked(self, event: DomainEvent) -> None:
@@ -150,6 +158,81 @@ class RewardsService:
             reference_type="goal",
             reference_id=str(goal_id),
             note=f"Completed “{event.payload.get('name') or 'goal'}”",
+        )
+
+    # ---------------------------------------------------- portfolio events
+    def on_investment_added(self, event: DomainEvent) -> None:
+        investment_id = event.payload.get("investment_id")
+        if not investment_id:
+            return
+        name = event.payload.get("name") or "investment"
+        self.ledger.award(
+            event.household_id,
+            "INVESTMENT_ADDED",
+            f"INVESTMENT_ADDED:investment:{investment_id}",
+            user_id=event.user_id,
+            reference_type="investment",
+            reference_id=str(investment_id),
+            note=f"Tracked “{name}”",
+        )
+
+    def on_investment_deleted(self, event: DomainEvent) -> None:
+        """Claw back both the tracking coin and any maturity payout when
+        the underlying investment is removed. Reversal is a no-op if the
+        original award never landed (cap hit, already reversed), so this
+        is safe on every delete."""
+        investment_id = event.payload.get("investment_id")
+        if not investment_id:
+            return
+        name = event.payload.get("name") or "investment"
+        self.ledger.reverse(
+            event.household_id,
+            f"INVESTMENT_ADDED:investment:{investment_id}",
+            kind="INVESTMENT_REVERSED",
+            note=f"Deleted “{name}”",
+        )
+        self.ledger.reverse(
+            event.household_id,
+            f"INVESTMENT_MATURED:investment:{investment_id}",
+            kind="INVESTMENT_REVERSED",
+            note=f"Deleted matured “{name}”",
+        )
+
+    def on_investment_matured(self, event: DomainEvent) -> None:
+        investment_id = event.payload.get("investment_id")
+        if not investment_id:
+            return
+        name = event.payload.get("name") or "investment"
+        self.ledger.award(
+            event.household_id,
+            "INVESTMENT_MATURED",
+            f"INVESTMENT_MATURED:investment:{investment_id}",
+            user_id=event.user_id,
+            reference_type="investment",
+            reference_id=str(investment_id),
+            note=f"“{name}” reached maturity",
+        )
+
+    def on_debt_completed(self, event: DomainEvent) -> None:
+        """A loan just closed. The reward tier is chosen by the debt's
+        kind — a home loan is worth ten times a consumer EMI — and the
+        rule catalogue owns that mapping, not this handler."""
+        debt_id = event.payload.get("debt_id")
+        if not debt_id:
+            return
+        kind = event.payload.get("kind") or ""
+        name = event.payload.get("name") or "loan"
+        rule_key = reward_rules.loan_rule_for(kind)
+        self.ledger.award(
+            event.household_id,
+            rule_key,
+            # Kind is part of the key so a debt whose type is edited
+            # after payoff doesn't get re-awarded under a new tier.
+            f"{rule_key}:debt:{debt_id}",
+            user_id=event.user_id,
+            reference_type="debt",
+            reference_id=str(debt_id),
+            note=f"Paid off “{name}”",
         )
 
     def _looks_automated(self, household_id: int) -> bool:
@@ -241,6 +324,11 @@ class RewardsService:
         # billed for three months, then absent from the month just gone.
         self._settle_subscriptions(household_id, user_id, months[-1], all_txns)
         self._settle_challenges(household_id, user_id)
+        # Portfolio coins are normally awarded on create/update. Settle
+        # also pays any investments/closed loans that already existed
+        # before those handlers were wired — same event keys, so a later
+        # create never double-pays.
+        self._settle_portfolio(household_id, user_id)
 
     @staticmethod
     def _settle_months(current_month: str) -> list[str]:
@@ -396,6 +484,57 @@ class RewardsService:
                 enrollment, "completed" if state.outcome.achieved else "missed"
             )
 
+    def _settle_portfolio(self, household_id: int, user_id: Optional[int]) -> None:
+        """Pay for investments already on the books, and for loans already
+        closed. Uses the same event keys as the live handlers so a later
+        create/update never pays twice."""
+        for inv in self.investments.list(household_id):
+            self.ledger.award(
+                household_id,
+                "INVESTMENT_ADDED",
+                f"INVESTMENT_ADDED:investment:{inv.id}",
+                user_id=user_id,
+                reference_type="investment",
+                reference_id=str(inv.id),
+                note=f"Tracked “{inv.name}”",
+            )
+            if self._investment_is_matured(inv):
+                self.ledger.award(
+                    household_id,
+                    "INVESTMENT_MATURED",
+                    f"INVESTMENT_MATURED:investment:{inv.id}",
+                    user_id=user_id,
+                    reference_type="investment",
+                    reference_id=str(inv.id),
+                    note=f"“{inv.name}” reached maturity",
+                )
+        for debt in self.debts.list(household_id):
+            if float(debt.outstanding or 0) > 0:
+                continue
+            if float(debt.principal or 0) <= 0:
+                continue
+            kind = debt.kind or ""
+            rule_key = reward_rules.loan_rule_for(kind)
+            self.ledger.award(
+                household_id,
+                rule_key,
+                f"{rule_key}:debt:{debt.id}",
+                user_id=user_id,
+                reference_type="debt",
+                reference_id=str(debt.id),
+                note=f"Paid off “{debt.name}”",
+            )
+
+    @staticmethod
+    def _investment_is_matured(inv) -> bool:
+        raw = (inv.maturity_date or "").strip()
+        if not raw:
+            return False
+        try:
+            return date.fromisoformat(raw[:10]) <= date.today()
+        except ValueError:
+            return False
+
     # ---------------------------------------------------------------- actions
     def record_review(self, household_id: int, user_id: Optional[int], month: str) -> int:
         """Pay for actually reading the month's numbers. Once per month,
@@ -465,3 +604,7 @@ def register_handlers() -> None:
     subscribe(EXPENSE_TRACKED, handler("on_expense_tracked"))
     subscribe(EXPENSE_DELETED, handler("on_expense_deleted"))
     subscribe(GOAL_COMPLETED, handler("on_goal_completed"))
+    subscribe(INVESTMENT_ADDED, handler("on_investment_added"))
+    subscribe(INVESTMENT_DELETED, handler("on_investment_deleted"))
+    subscribe(INVESTMENT_MATURED, handler("on_investment_matured"))
+    subscribe(DEBT_COMPLETED, handler("on_debt_completed"))

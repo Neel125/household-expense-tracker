@@ -27,6 +27,15 @@ log = logging.getLogger(__name__)
 EXPENSE_TRACKED = "EXPENSE_TRACKED"
 EXPENSE_DELETED = "EXPENSE_DELETED"
 GOAL_COMPLETED = "GOAL_COMPLETED"
+# Investments earn a small coin on being tracked and a larger one when
+# they reach maturity — the same "reward the discipline, not the size"
+# principle the rest of the catalogue follows.
+INVESTMENT_ADDED = "INVESTMENT_ADDED"
+INVESTMENT_DELETED = "INVESTMENT_DELETED"
+INVESTMENT_MATURED = "INVESTMENT_MATURED"
+# Fired when an outstanding loan drops to zero. Payload carries the debt
+# kind so the handler can pick the right coin tier (home vs car vs other).
+DEBT_COMPLETED = "DEBT_COMPLETED"
 
 
 @dataclass

@@ -12,6 +12,8 @@ const EMPTY = {
   categories: [],
   incomeSources: [],
   goals: [],
+  investments: [],
+  debts: [],
   budget: { monthlyBudget: 0, categories: [] },
   rewards: null,
 };
@@ -29,13 +31,26 @@ export function DataProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [transactions, members, accounts, categories, incomeSources, goals, budget, rewards] = await Promise.all([
+      const [
+        transactions,
+        members,
+        accounts,
+        categories,
+        incomeSources,
+        goals,
+        investments,
+        debts,
+        budget,
+        rewards,
+      ] = await Promise.all([
         api.transactions.list(),
         api.members.list(),
         api.accounts.list(),
         api.categories.list(),
         api.income.list(),
         api.goals.list(),
+        api.investments.list(),
+        api.debts.list(),
         api.budget.get(),
         // Coins move whenever transactions or goals do, so rewards ride
         // along on the same refresh instead of the page polling. Rewards
@@ -47,7 +62,18 @@ export function DataProvider({ children }) {
           return null;
         }),
       ]);
-      setData({ transactions, members, accounts, categories, incomeSources, goals, budget, rewards });
+      setData({
+        transactions,
+        members,
+        accounts,
+        categories,
+        incomeSources,
+        goals,
+        investments,
+        debts,
+        budget,
+        rewards,
+      });
     } catch (e) {
       console.error('Failed to load data', e);
     } finally {
@@ -129,6 +155,17 @@ export function DataProvider({ children }) {
       updateGoal: (id, payload) => run(() => api.goals.update(id, payload), 'Goal updated'),
       contributeGoal: (id, amount) => run(() => api.goals.contribute(id, amount), 'Contribution added'),
       removeGoal: (id) => run(() => api.goals.remove(id), 'Goal removed'),
+
+      // investments
+      addInvestment: (payload) =>
+        run(() => api.investments.create(payload), `${payload.name} added · +25 coins`),
+      updateInvestment: (id, payload) => run(() => api.investments.update(id, payload), 'Investment updated'),
+      removeInvestment: (id) => run(() => api.investments.remove(id), 'Investment removed'),
+
+      // debts
+      addDebt: (payload) => run(() => api.debts.create(payload), `${payload.name} added`),
+      updateDebt: (id, payload) => run(() => api.debts.update(id, payload), 'Debt updated'),
+      removeDebt: (id) => run(() => api.debts.remove(id), 'Debt removed'),
     }),
     [run]
   );

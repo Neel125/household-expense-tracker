@@ -11,10 +11,12 @@ from app.models import (
     CategoryBudget,
     ChallengeEnrollment,
     CoinTransaction,
+    Debt,
     Goal,
     HealthSnapshot,
     Household,
     IncomeSource,
+    Investment,
     Invite,
     Member,
     Transaction,
@@ -94,6 +96,16 @@ class IncomeSourceRepository(HouseholdRepository[IncomeSource]):
 class GoalRepository(HouseholdRepository[Goal]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, Goal)
+
+
+class InvestmentRepository(HouseholdRepository[Investment]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, Investment)
+
+
+class DebtRepository(HouseholdRepository[Debt]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, Debt)
 
 
 class CoinTransactionRepository(HouseholdRepository[CoinTransaction]):

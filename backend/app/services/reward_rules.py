@@ -36,6 +36,18 @@ RULES: dict[str, Rule] = {
         Rule("SUBSCRIPTION_DROPPED", 100, "Unused subscription cancelled"),
         Rule("MONTHLY_REVIEW", 25, "Monthly spending reviewed"),
         Rule("EMERGENCY_FUND_ON_TARGET", 200, "Emergency fund at target"),
+        # Portfolio building blocks. Tracking a new investment earns a
+        # nudge coin (capped per day so bulk-imports can't farm it);
+        # reaching maturity pays a proper milestone. Reversal is the
+        # mirror that keeps a create/delete loop honest.
+        Rule("INVESTMENT_ADDED", 25, "Investment tracked", daily_cap=100),
+        Rule("INVESTMENT_MATURED", 100, "Investment matured"),
+        # Loan payoffs. The tier is the *kind* of loan closed — a home
+        # loan is years of discipline, a consumer EMI is a few months, so
+        # the coin values reflect the effort rather than the ticket size.
+        Rule("LOAN_COMPLETED_HOME", 1000, "Home loan paid off"),
+        Rule("LOAN_COMPLETED_CAR", 500, "Car loan paid off"),
+        Rule("LOAN_COMPLETED_OTHER", 100, "Loan paid off"),
         # Variable payouts: the amount comes from the challenge definition
         # / the size of the score improvement, so `coins` is unused.
         Rule("CHALLENGE_COMPLETED", 0, "Challenge completed"),
@@ -44,6 +56,7 @@ RULES: dict[str, Rule] = {
         # is undone; redemption is reserved so spending coins later needs
         # no schema change (see README — the MVP has nothing to buy).
         Rule("EXPENSE_REVERSED", 0, "Logged expense deleted"),
+        Rule("INVESTMENT_REVERSED", 0, "Tracked investment deleted"),
         Rule("REWARD_REDEMPTION", 0, "Reward redeemed"),
     ]
 }
@@ -176,3 +189,21 @@ CHALLENGES_BY_KEY: dict[str, Challenge] = {c.key: c for c in CHALLENGES}
 DISCRETIONARY_CATEGORIES = {"shopping", "entertainment"}
 EATING_OUT_CATEGORIES = {"food & dining"}
 SUBSCRIPTION_CATEGORIES = {"subscriptions"}
+
+
+# ------------------------------------------------------------------- loans
+# Which coin rule to fire when a debt of a given kind is paid off. The
+# map only lists the tiers explicitly rewarded; anything not here falls
+# through to the "other" tier (consumer/personal/education/…). Keeping
+# this in reward_rules — not the debt service — means the reward rate
+# for a kind can be re-tiered without touching business logic.
+LOAN_COMPLETION_RULES: dict[str, str] = {
+    "home_loan": "LOAN_COMPLETED_HOME",
+    "car_loan": "LOAN_COMPLETED_CAR",
+}
+LOAN_COMPLETION_DEFAULT = "LOAN_COMPLETED_OTHER"
+
+
+def loan_rule_for(debt_kind: str) -> str:
+    """The reward rule key for closing a debt of this kind."""
+    return LOAN_COMPLETION_RULES.get((debt_kind or "").strip().lower(), LOAN_COMPLETION_DEFAULT)

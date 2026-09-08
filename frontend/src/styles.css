@@ -636,6 +636,52 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
 }
 .member-mini-name{ font-size:13.5px; font-weight:600; display:flex; align-items:center; }
 
+/* ============================== PORTFOLIO =============================== */
+.asset-list{ display:flex; flex-direction:column; gap:12px; }
+.asset-row{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto auto;
+  gap:14px; align-items:flex-start;
+  padding:12px 14px; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface-2);
+}
+.asset-icon{
+  width:40px; height:40px; border-radius:11px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--accent-wash); color:var(--accent-ink);
+  font-size:20px; flex:none;
+}
+.asset-icon.debt-icon{
+  background:color-mix(in srgb, var(--status-critical) 15%, var(--surface));
+  color:var(--status-critical);
+}
+.asset-main{ min-width:0; }
+.asset-title{
+  font-weight:600; font-size:14.5px; display:flex; align-items:center;
+  gap:8px; flex-wrap:wrap;
+}
+.asset-kind{ font-weight:400; }
+.asset-figures{ text-align:right; min-width:120px; }
+.asset-value{ font-weight:600; font-size:16px; font-variant-numeric:tabular-nums; }
+.asset-actions{ display:flex; gap:6px; flex-direction:column; align-items:stretch; }
+.asset-actions .btn{ justify-content:center; }
+.up-good{ color:var(--status-good-text); }
+.up-bad{ color:var(--status-critical); }
+
+@media (max-width:640px){
+  .asset-row{
+    grid-template-columns:44px minmax(0,1fr);
+    grid-template-areas:
+      "icon main"
+      "fig fig"
+      "act act";
+  }
+  .asset-row > .asset-icon   { grid-area:icon; }
+  .asset-row > .asset-main   { grid-area:main; }
+  .asset-row > .asset-figures{ grid-area:fig; text-align:left; }
+  .asset-row > .asset-actions{ grid-area:act; flex-direction:row; }
+}
+
 /* ============================== REWARDS =============================== */
 /* Coins, levels, challenges and the coin ledger. Everything here reuses
    the shared meter/pill/kpi styling; only the layout is new. */

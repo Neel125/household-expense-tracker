@@ -13,6 +13,7 @@ const TITLES = {
   '/income': 'Income',
   '/budgets': 'Budgets',
   '/goals': 'Goals',
+  '/portfolio': 'Portfolio',
   '/tools': 'Tools',
   '/family': 'Family',
   '/profile': 'Profile',
