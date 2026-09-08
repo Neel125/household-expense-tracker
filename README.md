@@ -25,6 +25,9 @@ repositories → models), backed by **PostgreSQL** (SQLite for local dev).
   balance.
 - **Goals** — emergency fund, vacation, education, etc., with progress
   and manual contributions.
+- **Rewards** — Finance Coins earned for financial discipline (never for
+  spending), a tracking streak, short-term challenges, levels and a
+  Financial Health Score. See [Rewards and Finance Coins](#rewards-and-finance-coins).
 - **Dashboard analytics** — category breakdown, income vs expenses,
   savings rate, month-over-month comparison, highest spending categories,
   and merchant-wise analysis.
@@ -40,10 +43,18 @@ expense-tracker/
 │   │   ├── core/              config, database engine, security (JWT/bcrypt), deps
 │   │   ├── models/            SQLModel tables (Household, User, Invite, Member,
 │   │   │                      Account, Category, CategoryBudget, IncomeSource,
-│   │   │                      Goal, Transaction)
+│   │   │                      Goal, Transaction, CoinTransaction,
+│   │   │                      ChallengeEnrollment, HealthSnapshot)
 │   │   ├── schemas/           Pydantic request/response DTOs (camelCase on the wire)
 │   │   ├── repositories/      data access (household-scoped, generic base)
 │   │   ├── services/          business logic + invariants
+│   │   │   ├── events.py        in-process domain event bus
+│   │   │   ├── reward_rules.py  the reward catalogue (coins, levels, challenges)
+│   │   │   ├── coin_ledger.py   the only writer of coins
+│   │   │   ├── rewards_service.py   the reward engine
+│   │   │   ├── challenge_service.py challenge progress
+│   │   │   ├── health_service.py    Financial Health Score
+│   │   │   └── month_math.py    server-side month totals for the rules
 │   │   ├── controllers/       HTTP routers (thin: parse -> service -> schema)
 │   │   └── migrate_legacy.py  folds any old single-tenant data into a household
 │   ├── seed.py                sample data + demo login
@@ -61,7 +72,7 @@ expense-tracker/
         ├── components/charts/  dependency-free SVG Donut/Bar charts
         ├── lib/compute.js     accrual/necessity/analytics formulas
         └── pages/             Dashboard, Add, Transactions, Accounts, Income,
-                               Budgets, Goals, Family, Settings, auth/
+                               Budgets, Goals, Rewards, Family, Settings, auth/
 ```
 
 Authentication is real now: passwords are bcrypt-hashed, a JWT is issued
@@ -106,6 +117,141 @@ household-scoped table; the old settings row that once held cards/loans
 has been replaced by first-class **Account** records, and any pre-existing
 single-tenant database is folded into one default household on first
 startup (`app/migrate_legacy.py`).
+
+## Rewards and Finance Coins
+
+The **Rewards** page turns the tracker into something with a habit loop.
+The whole design rests on one rule:
+
+> **Reward healthy financial behaviour, never spending.**
+
+Nothing in the catalogue scales with an amount spent. Logging an expense
+is worth a single coin and is capped at 10 a day, because tracking is the
+habit worth building; the real money is in behaviour:
+
+| Behaviour | Coins |
+| --- | --- |
+| Log an expense | +1 (max 10/day) |
+| 7 consecutive days of tracking | +20 |
+| Review last month's spending | +25 |
+| Stay within the monthly budget | +100 |
+| Cancel an unused subscription | +100 |
+| Save more than last month | +150 |
+| Hold the emergency fund at target | +200 |
+| Improve the health score | +25 per point, max 200 |
+| Complete a challenge | +100…200 |
+| Complete a financial goal | +500 |
+
+Coins drive a level — 🌱 Beginner, 🌿 Saver (500), 🌳 Smart Saver (2,000),
+💎 Financial Pro (5,000) — and each level lists what it unlocks. There is
+deliberately **nothing to redeem coins for yet**: levels, streaks and
+progress are the reward, which is the right MVP for a self-hosted app
+with no partners and no float to underwrite gift cards. The ledger
+already carries a `REWARD_REDEMPTION` rule and supports negative rows, so
+adding redemption later needs no schema change.
+
+### The coin ledger
+
+Coins are **never** stored as a running total on a row. `CoinTransaction`
+is an append-only ledger and the balance is `SUM(amount)`:
+
+```
+kind                      amount   event_key
+EXPENSE_TRACKED               +1   EXPENSE_TRACKED:txn:412
+BUDGET_KEPT                 +100   BUDGET_KEPT:2026-08
+SUBSCRIPTION_DROPPED        +100   SUBSCRIPTION_DROPPED:netflix:2026-08
+EXPENSE_REVERSED              -1   EXPENSE_REVERSED:EXPENSE_TRACKED:txn:412
+```
+
+That buys auditability (every coin traces to the behaviour that earned
+it), idempotency and reconciliation. `app/services/coin_ledger.py` is the
+only module allowed to write coins, and it holds three invariants: the
+ledger is the source of truth, every event pays at most once, and nothing
+is ever edited or deleted. Coins belong to the **household** — the app's
+tenancy boundary, one shared set of books — with the acting login
+recorded on each row for attribution.
+
+### Preventing reward farming
+
+The obvious attack is to create and delete a ₹1 expense in a loop. Four
+things close it:
+
+- **Idempotency.** Every award carries an `event_key` with a unique index
+  behind it. A retried request, a double-click or two workers all collapse
+  onto the same key.
+- **Reversal.** Deleting a rewarded expense writes a compensating
+  negative row, so the loop nets zero. Reversals are their own rule, so
+  they don't refund the daily allowance either — the loop burns through
+  the cap *and* earns nothing.
+- **Daily caps.** Expense logging pays at most 10 coins a day. A withheld
+  award still writes a zero-coin row, so there is a record of it.
+- **Burst detection.** More than 60 entries in five minutes is a script,
+  not a person; awards stop and the attempt is flagged in the ledger.
+
+A ₹0 entry earns nothing either, and editing an expense into an income
+row moves the coin with it.
+
+### Financial Health Score
+
+A separate 0–100 score over five components — budget discipline, savings,
+expense tracking, debt management, emergency fund. Every component is a
+ratio the household controls (spend against *its own* budget, savings
+against *its own* income), so a small income can score 90 and a big
+spender can score 40. Coins are paid for **improving** the score, not for
+its level. A component that can't be judged yet (no budget set, no income
+recorded) is left out of the average instead of scoring zero.
+
+### How it hangs together
+
+The expense, goal and budget services don't know rewards exist. They
+publish domain facts on an in-process event bus
+(`app/services/events.py`) and the engine subscribes:
+
+```
+TransactionService ──EXPENSE_TRACKED──┐
+GoalService ────────GOAL_COMPLETED────┼──▶ event bus ──▶ RewardsService
+                                      │                      │
+                                      └──────────────┐       ▼
+                                                      Reward rule engine
+                                                             │
+                                                             ▼
+                                                       Coin ledger
+```
+
+Handlers are registered once in `app/main.py`, dispatch synchronously on
+the caller's session, and a handler that raises is logged and skipped — a
+reward bug must never fail a user's save. Swapping this bus for Kafka, an
+outbox table or SQS means replacing one module and nothing else.
+
+Rules that aren't a single user action (budget kept, saved more than last
+month, a dropped subscription, a finished challenge) are evaluated in one
+idempotent sweep, `RewardsService.settle`, which runs lazily whenever
+`GET /api/rewards` is read. In production the same method would be called
+from a nightly job and behave identically, because every award is keyed.
+It only pays out for the **last three complete months**, so switching the
+feature on doesn't hand a household with two years of history a
+five-figure windfall.
+
+Challenge *definitions* live in code; only the fact that a household
+joined one is stored, and progress is recomputed from transactions on
+every read — so editing or deleting a transaction re-scores a challenge
+immediately. A challenge is settled only once its window has closed, so
+it can never be claimed while it could still be failed.
+
+The API is `GET /api/rewards` (the whole page in one response, and it
+settles as a side effect), `GET /api/rewards/health`,
+`POST /api/rewards/review`, `POST /api/rewards/challenges/{key}/join`
+and `DELETE /api/rewards/challenges/{key}`.
+
+### What is deliberately not built
+
+- **Redemption / gift cards** — non-monetary rewards first, as above.
+- **Referral coins.** The invite system exists, but coins are
+  household-scoped, so paying for invites would be farmable by inviting
+  throwaway addresses. It needs conversion tracking before it's safe.
+- **Cancelled subscriptions are inferred, not self-reported** — a
+  Subscriptions-category merchant billed for three straight months and
+  then absent counts as cancelled. Nobody has to remember to tell the app.
 
 ## The core idea: credit card expense vs. repayment
 
@@ -234,6 +380,12 @@ the caller's household so every query is scoped to it.
 - **New necessity categories or transaction types**: edit the `<option>`
   lists in `frontend/src/components/AddTransaction.jsx` and the matching
   logic in `frontend/src/lib/compute.js`.
+- **New reward rules**: add a `Rule` to `RULES` in
+  `backend/app/services/reward_rules.py` (that also feeds the "how coins
+  are earned" table in the UI, so the two can't disagree), then award it
+  from `RewardsService` with a fresh `event_key`. **New challenges**: add
+  a `Challenge` there plus an evaluator in `challenge_service.py` —
+  nothing else needs to change.
 - **Charts**: `frontend/src/components/charts/DonutChart.jsx` and
   `BarChart.jsx` are small, dependency-free SVG components — extend them
   directly rather than pulling in a charting library.

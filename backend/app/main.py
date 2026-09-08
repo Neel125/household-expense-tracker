@@ -11,10 +11,18 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.controllers import api_router
 from app.services.errors import DomainError
+from app.services.events import clear as clear_event_handlers
+from app.services.rewards_service import register_handlers as register_reward_handlers
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Ledger & Card API")
+
+    # Domain event subscribers. Registered here — the one place that
+    # already knows about every part of the app — so the expense, budget
+    # and goal services never import the rewards engine.
+    clear_event_handlers()
+    register_reward_handlers()
 
     app.add_middleware(
         CORSMiddleware,
@@ -55,6 +63,13 @@ def _mount_frontend(app: FastAPI) -> None:
 
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
+        # Client-side routes fall through to index.html, but /api must not:
+        # answering an unknown endpoint with 200 + HTML makes a version
+        # skew between a cached frontend and this backend look like a
+        # working route, and turns `fetch(...).json()` into a parse error
+        # instead of an honest 404.
+        if full_path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
         candidate = os.path.join(dist, full_path)
         if full_path and os.path.isfile(candidate):
             return FileResponse(candidate)

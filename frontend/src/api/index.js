@@ -48,6 +48,15 @@ export const api = {
     update: (id, data) => http.put(`/api/income-sources/${id}`, data),
     remove: (id) => http.del(`/api/income-sources/${id}`),
   },
+  rewards: {
+    // One GET backs the whole Rewards page; reading it also settles
+    // anything earned since the last look (see RewardsService.settle).
+    summary: () => http.get('/api/rewards'),
+    health: (month) => http.get('/api/rewards/health' + (month ? `?month=${encodeURIComponent(month)}` : '')),
+    recordReview: (month) => http.post('/api/rewards/review', { month }),
+    joinChallenge: (key) => http.post(`/api/rewards/challenges/${encodeURIComponent(key)}/join`),
+    leaveChallenge: (key) => http.del(`/api/rewards/challenges/${encodeURIComponent(key)}`),
+  },
   goals: {
     list: () => http.get('/api/goals'),
     create: (data) => http.post('/api/goals', data),

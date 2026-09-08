@@ -13,6 +13,7 @@ const EMPTY = {
   incomeSources: [],
   goals: [],
   budget: { monthlyBudget: 0, categories: [] },
+  rewards: null,
 };
 
 // Loads and caches every household collection once the user is signed in,
@@ -28,7 +29,7 @@ export function DataProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [transactions, members, accounts, categories, incomeSources, goals, budget] = await Promise.all([
+      const [transactions, members, accounts, categories, incomeSources, goals, budget, rewards] = await Promise.all([
         api.transactions.list(),
         api.members.list(),
         api.accounts.list(),
@@ -36,8 +37,17 @@ export function DataProvider({ children }) {
         api.income.list(),
         api.goals.list(),
         api.budget.get(),
+        // Coins move whenever transactions or goals do, so rewards ride
+        // along on the same refresh instead of the page polling. Rewards
+        // are a bonus layer, not the books: if that one call fails the
+        // rest of the app must still load, so it resolves to null instead
+        // of rejecting the whole batch.
+        api.rewards.summary().catch((e) => {
+          console.error('Rewards unavailable', e);
+          return null;
+        }),
       ]);
-      setData({ transactions, members, accounts, categories, incomeSources, goals, budget });
+      setData({ transactions, members, accounts, categories, incomeSources, goals, budget, rewards });
     } catch (e) {
       console.error('Failed to load data', e);
     } finally {
@@ -108,6 +118,11 @@ export function DataProvider({ children }) {
       addIncome: (payload) => run(() => api.income.create(payload), `${payload.name} added`),
       updateIncome: (id, payload) => run(() => api.income.update(id, payload), 'Income source updated'),
       removeIncome: (id) => run(() => api.income.remove(id), 'Income source removed'),
+
+      // rewards
+      joinChallenge: (key, title) => run(() => api.rewards.joinChallenge(key), `Joined “${title}”`),
+      leaveChallenge: (key) => run(() => api.rewards.leaveChallenge(key), 'Left the challenge'),
+      recordReview: (month) => run(() => api.rewards.recordReview(month), 'Review logged — coins added'),
 
       // goals
       addGoal: (payload) => run(() => api.goals.create(payload), `${payload.name} created`),

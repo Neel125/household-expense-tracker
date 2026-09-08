@@ -635,3 +635,68 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
   padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);
 }
 .member-mini-name{ font-size:13.5px; font-weight:600; display:flex; align-items:center; }
+
+/* ============================== REWARDS =============================== */
+/* Coins, levels, challenges and the coin ledger. Everything here reuses
+   the shared meter/pill/kpi styling; only the layout is new. */
+.coin-badge{
+  display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:100px;
+  font-size:12.5px; font-weight:600; white-space:nowrap;
+  background:color-mix(in oklab, var(--status-warning) 22%, transparent); color:#8a5a00;
+  font-variant-numeric:tabular-nums;
+}
+:root:not([data-theme="light"]) .coin-badge{ color:var(--status-warning); }
+:root[data-theme="dark"] .coin-badge{ color:var(--status-warning); }
+
+.health-list{ display:flex; flex-direction:column; gap:14px; }
+.health-row{ display:grid; grid-template-columns:minmax(120px,1.3fr) minmax(70px,1fr) 34px; gap:12px; align-items:center; }
+.health-label{ font-size:13.5px; min-width:0; overflow-wrap:anywhere; }
+.health-score{ font-size:13px; text-align:right; }
+@media (max-width:640px){
+  .health-row{ grid-template-columns:1fr 34px; }
+  .health-row > .meter{ grid-column:1 / -1; }
+}
+
+.level-head{ display:flex; align-items:center; gap:12px; margin-top:4px; }
+.level-icon{
+  width:44px; height:44px; border-radius:12px; background:var(--accent-wash);
+  display:flex; align-items:center; justify-content:center; font-size:22px; flex:0 0 auto;
+}
+.level-name{ font-family:"Fraunces",serif; font-size:17px; font-weight:600; }
+.level-perks{ margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
+.perk-list{ list-style:none; padding:0; margin:0; display:flex; flex-wrap:wrap; gap:6px; }
+.perk-list li{
+  font-size:11.5px; padding:3px 8px; border-radius:7px;
+  background:var(--surface-2); border:1px solid var(--border); color:var(--text-secondary);
+}
+.perk-list.locked li{ opacity:.55; border-style:dashed; }
+
+/* Cards in a row share a height and keep their action on one baseline,
+   so a grid of challenges doesn't stagger. */
+.section-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:22px 0 12px; }
+.challenge-grid{ align-items:stretch; }
+.challenge-card{ display:flex; flex-direction:column; }
+.challenge-actions{ margin-top:auto; padding-top:12px; }
+.challenge-card.won{ border-color:color-mix(in oklab, var(--status-good) 45%, var(--border)); }
+.challenge-head{ display:flex; align-items:center; gap:10px; }
+.challenge-icon{
+  width:36px; height:36px; border-radius:10px; background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center; font-size:17px; flex:0 0 auto;
+}
+.challenge-title{ font-weight:600; font-size:14px; }
+.challenge-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; }
+
+.earn-list{ display:flex; flex-direction:column; }
+.earn-row{
+  display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+  font-size:13px; padding:7px 0; border-bottom:1px solid var(--border);
+}
+.earn-row:last-child{ border-bottom:none; }
+.earn-coins{ color:var(--status-good-text); font-weight:600; white-space:nowrap; }
+:root:not([data-theme="light"]) .earn-coins{ color:var(--status-good); }
+:root[data-theme="dark"] .earn-coins{ color:var(--status-good); }
+
+.review-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  margin-top:14px; padding-top:14px; border-top:1px solid var(--border);
+}

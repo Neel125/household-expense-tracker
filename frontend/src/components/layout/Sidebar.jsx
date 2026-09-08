@@ -11,6 +11,7 @@ const NAV = [
   { to: '/income', icon: '↑', label: 'Income' },
   { to: '/budgets', icon: '◑', label: 'Budgets' },
   { to: '/goals', icon: '◎', label: 'Goals' },
+  { to: '/rewards', icon: '★', label: 'Rewards' },
   { to: '/tools', icon: '∑', label: 'Tools' },
   { to: '/family', icon: '⌂', label: 'Family' },
 ];
