@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ledger-db
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    volumes:
+      - ledger-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: ledger-and-card
+    container_name: ledger-and-card
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Whole app — UI and API — on http://127.0.0.1:8000
+      - "8000:8000"
+    environment:
+      # Postgres by default now (multi-user auth). To run on SQLite instead,
+      # set: sqlite:////app/data/expense_tracker.db (and mount a volume).
+      DATABASE_URL: postgresql://ledger:ledger@db:5432/ledger
+      # CHANGE THIS in any real deployment — it signs the login tokens.
+      JWT_SECRET: "change-me-to-a-long-random-string"
+      # Same-origin here, so CORS is unused. Set your real origin(s),
+      # comma-separated, if you deploy the frontend elsewhere.
+      ALLOWED_ORIGINS: "*"
+      # Set to "true" to load the sample data on first start
+      # (demo@ledger.app / demo1234).
+      SEED_DATA: "true"
+    restart: unless-stopped
+
+volumes:
+  ledger-pg:

@@ -1,0 +1,14 @@
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+backend/expense_tracker.db
+backend/*.log
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Env
+.env
+frontend/.env

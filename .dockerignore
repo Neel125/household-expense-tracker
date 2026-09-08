@@ -1,0 +1,15 @@
+**/.git
+**/.gitignore
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+**/*.log
+**/node_modules
+**/dist
+**/.env
+**/*.db
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md
