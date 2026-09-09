@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import BarChart from '../components/charts/BarChart';
 import DonutChart from '../components/charts/DonutChart';
 import {
@@ -13,6 +13,7 @@ import {
   Select,
   StatCard,
 } from '../components/ui';
+import { api } from '../api';
 import { fmtINR, shortDate } from '../lib/format';
 import { useData } from '../context/DataContext';
 
@@ -122,10 +123,13 @@ function InvestmentModal({ initial, onSave, onClose }) {
           <Field label="Institution">
             <input value={form.institution} onChange={set('institution')} placeholder="Bank / broker / AMC" />
           </Field>
-          <Field label="Amount invested (₹)">
+          <Field
+            label="Opening invested (₹)"
+            hint="What went in before you started logging transactions. Linked Investment transactions add on top of this."
+          >
             <input type="number" step="1000" value={form.amountInvested} onChange={set('amountInvested')} />
           </Field>
-          <Field label="Current value (₹)" hint="Today's value — override the Tools calculators here.">
+          <Field label="Current value (₹)" hint="Leave 0 to let the expected return project it from your contributions.">
             <input type="number" step="1000" value={form.currentValue} onChange={set('currentValue')} />
           </Field>
           <Field label="Expected return (% p.a.)">
@@ -191,7 +195,10 @@ function DebtModal({ initial, onSave, onClose }) {
           <Field label="Original principal (₹)">
             <input type="number" step="10000" value={form.principal} onChange={set('principal')} />
           </Field>
-          <Field label="Outstanding (₹)" hint="Current balance. If blank, we assume it equals the principal.">
+          <Field
+            label="Opening outstanding (₹)"
+            hint="The balance when you started logging EMIs here. Linked Loan transactions pay it down from this figure."
+          >
             <input type="number" step="10000" value={form.outstanding} onChange={set('outstanding')} />
           </Field>
           <Field label="Interest rate (% p.a.)">
@@ -203,7 +210,7 @@ function DebtModal({ initial, onSave, onClose }) {
           <Field label="Original tenure (months)">
             <input type="number" step="1" value={form.tenureMonths} onChange={set('tenureMonths')} />
           </Field>
-          <Field label="Months paid">
+          <Field label="EMIs paid before tracking">
             <input type="number" step="1" value={form.monthsPaid} onChange={set('monthsPaid')} />
           </Field>
           <Field label="Start date">
@@ -224,12 +231,147 @@ function DebtModal({ initial, onSave, onClose }) {
   );
 }
 
+// ------------------------------------------------------------ detail modals
+// Both fetch on open rather than riding along in the list response: a
+// full instalment history per holding would bloat every page load, and
+// this is a click-to-inspect view.
+function useDetail(fetcher, dep) {
+  const [state, setState] = useState({ loading: true, error: '', data: null });
+  useEffect(() => {
+    let live = true;
+    fetcher()
+      .then((data) => live && setState({ loading: false, error: '', data }))
+      .catch((e) => live && setState({ loading: false, error: e.message, data: null }));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep]);
+  return state;
+}
+
+function DebtScheduleModal({ debt, onClose }) {
+  const { loading, error, data } = useDetail(() => api.debts.schedule(debt.id), debt.id);
+  const rows = data?.instalments || [];
+  return (
+    <Modal title={`${debt.name} — where each EMI went`} onClose={onClose} wide>
+      <p className="note">
+        Interest is charged on the balance outstanding at the time of each payment; whatever
+        the payment covers beyond that reduces the principal. A payment made soon after the
+        previous one accrues less interest, so a part-prepayment is almost all principal.
+      </p>
+      {loading ? (
+        <EmptyState>Loading the schedule…</EmptyState>
+      ) : error ? (
+        <EmptyState>{error}</EmptyState>
+      ) : rows.length === 0 ? (
+        <EmptyState>No EMIs linked to this loan yet.</EmptyState>
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th style={{ textAlign: 'right' }}>Paid</th>
+                  <th style={{ textAlign: 'right' }}>Interest</th>
+                  <th style={{ textAlign: 'right' }}>Principal</th>
+                  <th style={{ textAlign: 'right' }}>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.transactionId}>
+                    <td className="cell-date note">{shortDate(r.date)}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{fmtINR(r.paid)}</td>
+                    <td className="num up-bad" style={{ textAlign: 'right' }}>{fmtINR(r.interest)}</td>
+                    <td className="num up-good" style={{ textAlign: 'right' }}>{fmtINR(r.principal)}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{fmtINR(r.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="earn-row" style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <span className="note">
+              {rows.length} payment{rows.length === 1 ? '' : 's'} ·{' '}
+              {fmtINR(data.debt.totalPaid)} paid
+            </span>
+            <span className="num">
+              <span className="up-good">{fmtINR(data.debt.principalRepaid)}</span> principal +{' '}
+              <span className="up-bad">{fmtINR(data.debt.interestPaid)}</span> interest
+            </span>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function ContributionsModal({ investment, onClose }) {
+  const { loading, error, data } = useDetail(
+    () => api.investments.get(investment.id),
+    investment.id
+  );
+  const rows = data?.contributions || [];
+  const inv = data?.investment;
+  return (
+    <Modal title={`${investment.name} — contributions`} onClose={onClose} wide>
+      <p className="note">
+        Every Investment transaction linked to this holding, and what each one is worth today
+        at {investment.annualReturnPct || 0}% p.a.
+        {investment.valueIsManual && ' Your own valuation is being used instead of the projection.'}
+      </p>
+      {loading ? (
+        <EmptyState>Loading contributions…</EmptyState>
+      ) : error ? (
+        <EmptyState>{error}</EmptyState>
+      ) : rows.length === 0 ? (
+        <EmptyState>Nothing linked to this holding yet.</EmptyState>
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>What</th>
+                  <th style={{ textAlign: 'right' }}>Paid in</th>
+                  <th style={{ textAlign: 'right' }}>Worth now</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.transactionId}>
+                    <td className="cell-date note">{shortDate(r.date)}</td>
+                    <td>{r.name}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{fmtINR(r.amount)}</td>
+                    <td className="num up-good" style={{ textAlign: 'right' }}>{fmtINR(r.grownTo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="earn-row" style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <span className="note">
+              {rows.length} contribution{rows.length === 1 ? '' : 's'}
+              {inv?.amountInvested > 0 && <> plus {fmtINR(inv.amountInvested)} opening</>}
+            </span>
+            <span className="num">{fmtINR(inv?.totalInvested)} invested</span>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 // -------------------------------------------------------------- list items
-function InvestmentRow({ inv, onEdit, onDelete }) {
+// Every figure below `invested` comes from the backend, which sums the
+// linked Investment transactions and grows each one from its own date.
+function InvestmentRow({ inv, onEdit, onDelete, onHistory }) {
   const meta = INV_META[inv.kind] || INV_META.other;
-  const gain = (inv.currentValue || 0) - (inv.amountInvested || 0);
-  const gainPct = inv.amountInvested > 0 ? (gain / inv.amountInvested) * 100 : 0;
-  const tone = gain > 0 ? 'up-good' : gain < 0 ? 'up-bad' : '';
+  const tone = inv.gain > 0 ? 'up-good' : inv.gain < 0 ? 'up-bad' : '';
+  const linked = inv.contributionCount > 0;
   return (
     <div className="asset-row">
       <div className="asset-icon" style={{ background: INV_COLORS[inv.kind] || 'var(--accent-wash)' }}>
@@ -239,21 +381,35 @@ function InvestmentRow({ inv, onEdit, onDelete }) {
         <div className="asset-title">
           {inv.name}
           <span className="asset-kind"><Pill>{meta.label}</Pill></span>
+          {linked && <span className="asset-kind"><Pill tone="good">auto</Pill></span>}
         </div>
         <div className="note">
           {inv.institution || '—'}
           {inv.startDate && <> · started {shortDate(inv.startDate)}</>}
           {inv.maturityDate && <> · matures {shortDate(inv.maturityDate)}</>}
         </div>
+        {linked && (
+          <div className="note" style={{ marginTop: 4 }}>
+            {inv.contributionCount} logged contribution{inv.contributionCount === 1 ? '' : 's'} ·{' '}
+            {fmtINR(inv.contributed)}
+            {inv.amountInvested > 0 && <> on top of {fmtINR(inv.amountInvested)} opening</>}
+            {inv.lastContributionDate && <> · last {shortDate(inv.lastContributionDate)}</>}
+          </div>
+        )}
       </div>
       <div className="asset-figures">
-        <div className="asset-value">{fmtINR(inv.currentValue)}</div>
+        <div className="asset-value">{fmtINR(inv.effectiveValue)}</div>
         <div className={'note ' + tone}>
-          {gain >= 0 ? '+' : '−'}{fmtINR(Math.abs(gain))} ({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)
+          {inv.gain >= 0 ? '+' : '−'}{fmtINR(Math.abs(inv.gain))} (
+          {inv.gainPct >= 0 ? '+' : ''}{Number(inv.gainPct).toFixed(1)}%)
         </div>
-        <div className="note">invested {fmtINR(inv.amountInvested)}</div>
+        <div className="note">invested {fmtINR(inv.totalInvested)}</div>
+        <div className="note">{inv.valueIsManual ? 'your valuation' : 'projected'}</div>
       </div>
       <div className="asset-actions">
+        {linked && (
+          <Button size="sm" variant="ghost" onClick={onHistory}>Contributions</Button>
+        )}
         <Button size="sm" variant="ghost" onClick={onEdit}>Edit</Button>
         <Button size="sm" variant="danger" onClick={onDelete}>Remove</Button>
       </div>
@@ -261,14 +417,14 @@ function InvestmentRow({ inv, onEdit, onDelete }) {
   );
 }
 
-function DebtRow({ debt, onEdit, onDelete }) {
+// `outstandingNow`, `principalRepaid` and `interestPaid` are amortised by
+// the backend over the EMIs linked to this loan — see the schedule modal
+// for the per-payment split.
+function DebtRow({ debt, onEdit, onDelete, onSchedule }) {
   const meta = DEBT_META[debt.kind] || DEBT_META.other;
-  const paidPct =
-    debt.principal > 0
-      ? Math.max(0, Math.min(100, ((debt.principal - debt.outstanding) / debt.principal) * 100))
-      : 0;
   const monthsRemaining =
-    debt.tenureMonths > 0 ? Math.max(0, debt.tenureMonths - (debt.monthsPaid || 0)) : 0;
+    debt.tenureMonths > 0 ? Math.max(0, debt.tenureMonths - (debt.emisPaid || 0)) : 0;
+  const linked = debt.paymentCount > 0;
   return (
     <div className="asset-row">
       <div className="asset-icon debt-icon">{meta.icon}</div>
@@ -276,28 +432,44 @@ function DebtRow({ debt, onEdit, onDelete }) {
         <div className="asset-title">
           {debt.name}
           <span className="asset-kind"><Pill tone="warning">{meta.label}</Pill></span>
+          {debt.isClosed && <span className="asset-kind"><Pill tone="good">closed</Pill></span>}
+          {linked && !debt.isClosed && <span className="asset-kind"><Pill tone="good">auto</Pill></span>}
         </div>
         <div className="note">
           {debt.lender || '—'}
           {debt.emi > 0 && <> · EMI {fmtINR(debt.emi)}</>}
           {debt.annualRatePct > 0 && <> · {debt.annualRatePct}% p.a.</>}
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div className="asset-progress">
           <div className="note" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
             <span>Paid off</span>
-            <span className="num">{fmtINR(debt.principal - debt.outstanding)} of {fmtINR(debt.principal)}</span>
+            <span className="num">
+              {fmtINR(Math.max(0, (debt.principal || 0) - debt.outstandingNow))} of{' '}
+              {fmtINR(debt.principal)}
+            </span>
           </div>
-          <ProgressBar pct={paidPct} />
+          <ProgressBar pct={debt.payoffPct} />
         </div>
+        {linked && (
+          <div className="note" style={{ marginTop: 6 }}>
+            {debt.paymentCount} logged EMI{debt.paymentCount === 1 ? '' : 's'} ·{' '}
+            <span className="up-good">{fmtINR(debt.principalRepaid)} principal</span> ·{' '}
+            <span className="up-bad">{fmtINR(debt.interestPaid)} interest</span>
+            {debt.lastPaymentDate && <> · last {shortDate(debt.lastPaymentDate)}</>}
+          </div>
+        )}
       </div>
       <div className="asset-figures">
-        <div className="asset-value">{fmtINR(debt.outstanding)}</div>
+        <div className="asset-value">{fmtINR(debt.outstandingNow)}</div>
         <div className="note">outstanding</div>
         {monthsRemaining > 0 && (
           <div className="note">{monthsRemaining} EMI{monthsRemaining === 1 ? '' : 's'} left</div>
         )}
       </div>
       <div className="asset-actions">
+        {linked && (
+          <Button size="sm" variant="ghost" onClick={onSchedule}>EMI split</Button>
+        )}
         <Button size="sm" variant="ghost" onClick={onEdit}>Edit</Button>
         <Button size="sm" variant="danger" onClick={onDelete}>Remove</Button>
       </div>
@@ -320,18 +492,34 @@ export default function PortfolioPage() {
   const [invModal, setInvModal] = useState(null);
   const [debtModal, setDebtModal] = useState(null);
   const [confirmRemove, setConfirmRemove] = useState(null); // {kind, id, name}
+  const [schedule, setSchedule] = useState(null); // a debt, for the EMI split
+  const [contributions, setContributions] = useState(null); // an investment
 
+  // `totalInvested` and `effectiveValue` already fold in every linked
+  // transaction, so these totals move the moment an SIP or EMI is logged.
   const totalInvested = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.amountInvested) || 0), 0),
+    () => investments.reduce((a, i) => a + (Number(i.totalInvested) || 0), 0),
     [investments]
   );
   const totalValue = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.currentValue) || 0), 0),
+    () => investments.reduce((a, i) => a + (Number(i.effectiveValue) || 0), 0),
     [investments]
   );
   const totalGain = totalValue - totalInvested;
   const totalDebt = useMemo(
-    () => debts.reduce((a, d) => a + (Number(d.outstanding) || 0), 0),
+    () => debts.reduce((a, d) => a + (Number(d.outstandingNow) || 0), 0),
+    [debts]
+  );
+  const autoContributed = useMemo(
+    () => investments.reduce((a, i) => a + (Number(i.contributed) || 0), 0),
+    [investments]
+  );
+  const principalRepaid = useMemo(
+    () => debts.reduce((a, d) => a + (Number(d.principalRepaid) || 0), 0),
+    [debts]
+  );
+  const interestPaid = useMemo(
+    () => debts.reduce((a, d) => a + (Number(d.interestPaid) || 0), 0),
     [debts]
   );
   const monthlyEmi = useMemo(
@@ -348,7 +536,7 @@ export default function PortfolioPage() {
   const investmentMix = useMemo(() => {
     const buckets = new Map();
     for (const inv of investments) {
-      const v = Number(inv.currentValue) || 0;
+      const v = Number(inv.effectiveValue) || 0;
       if (v <= 0) continue;
       buckets.set(inv.kind, (buckets.get(inv.kind) || 0) + v);
     }
@@ -360,7 +548,7 @@ export default function PortfolioPage() {
   }, [investments]);
 
   const debtBars = useMemo(
-    () => debts.filter((d) => (Number(d.outstanding) || 0) > 0),
+    () => debts.filter((d) => (Number(d.outstandingNow) || 0) > 0),
     [debts]
   );
 
@@ -382,19 +570,36 @@ export default function PortfolioPage() {
     <section>
       <PageHeader
         title="Portfolio"
-        subtitle="Household assets and debts. Tracking an investment earns 25 coins; maturity pays 100. Closing a home loan pays 1,000, a car loan 500, and other loans 100."
+        subtitle="Household assets and debts. Log an Investment transaction against a holding and it adds to the invested total; log a Loan EMI against a debt and it is split into interest and principal, reducing what's outstanding."
       />
 
       <div className="grid kpi-row">
         <StatCard label="Net worth" value={netWorth} tone={netWorth >= 0 ? 'good' : 'warning'} foot="assets − debts" />
-        <StatCard label="Investments" value={totalValue} foot={`invested ${fmtINR(totalInvested)}`} />
+        <StatCard
+          label="Investments"
+          value={totalValue}
+          foot={
+            autoContributed > 0
+              ? `invested ${fmtINR(totalInvested)} · ${fmtINR(autoContributed)} from transactions`
+              : `invested ${fmtINR(totalInvested)}`
+          }
+        />
         <StatCard
           label="Gains"
           value={totalGain}
           tone={totalGain >= 0 ? 'good' : 'warning'}
           foot={totalInvested > 0 ? `${((totalGain / totalInvested) * 100).toFixed(1)}%` : '—'}
         />
-        <StatCard label="Debts" value={totalDebt} tone={totalDebt > 0 ? 'warning' : undefined} foot="outstanding" />
+        <StatCard
+          label="Debts"
+          value={totalDebt}
+          tone={totalDebt > 0 ? 'warning' : undefined}
+          foot={
+            principalRepaid > 0
+              ? `${fmtINR(principalRepaid)} principal repaid · ${fmtINR(interestPaid)} interest`
+              : 'outstanding'
+          }
+        />
         <StatCard label="Monthly EMI" value={monthlyEmi} foot={monthlyContribution > 0 ? `SIP/RD ${fmtINR(monthlyContribution)}` : 'total across debts'} />
       </div>
 
@@ -418,13 +623,13 @@ export default function PortfolioPage() {
                     {
                       name: 'Outstanding',
                       color: 'var(--status-critical)',
-                      values: debtBars.map((d) => Number(d.outstanding) || 0),
+                      values: debtBars.map((d) => Number(d.outstandingNow) || 0),
                     },
                     {
                       name: 'Paid off',
                       color: 'var(--status-good)',
                       values: debtBars.map(
-                        (d) => Math.max(0, (Number(d.principal) || 0) - (Number(d.outstanding) || 0))
+                        (d) => Math.max(0, (Number(d.principal) || 0) - (Number(d.outstandingNow) || 0))
                       ),
                     },
                   ]}
@@ -437,7 +642,7 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      <div className="grid two-col" style={{ marginTop: 16 }}>
+      <div className="stacked" style={{ marginTop: 16 }}>
         <Card
           title="Investments"
           hint={`${investments.length} item${investments.length === 1 ? '' : 's'}`}
@@ -473,6 +678,7 @@ export default function PortfolioPage() {
                         notes: inv.notes || '',
                       })
                     }
+                    onHistory={() => setContributions(inv)}
                     onDelete={() => setConfirmRemove({ kind: 'investment', id: inv.id, name: inv.name })}
                   />
                 ))}
@@ -518,6 +724,7 @@ export default function PortfolioPage() {
                         notes: d.notes || '',
                       })
                     }
+                    onSchedule={() => setSchedule(d)}
                     onDelete={() => setConfirmRemove({ kind: 'debt', id: d.id, name: d.name })}
                   />
                 ))}
@@ -540,6 +747,10 @@ export default function PortfolioPage() {
           onSave={saveDebt}
           onClose={() => setDebtModal(null)}
         />
+      )}
+      {schedule && <DebtScheduleModal debt={schedule} onClose={() => setSchedule(null)} />}
+      {contributions && (
+        <ContributionsModal investment={contributions} onClose={() => setContributions(null)} />
       )}
       {confirmRemove && (
         <Modal

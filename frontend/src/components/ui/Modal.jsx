@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 
 // A centered dialog over a backdrop. Escape and backdrop-click close it.
-export default function Modal({ title, onClose, children, footer }) {
+// `wide` widens it for tabular content — the default width suits a form.
+export default function Modal({ title, onClose, children, footer, wide = false }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose?.();
     window.addEventListener('keydown', onKey);
@@ -10,7 +11,7 @@ export default function Modal({ title, onClose, children, footer }) {
 
   return (
     <div className="modal-backdrop" onClick={() => onClose?.()}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={'modal' + (wide ? ' modal-wide' : '')} onClick={(e) => e.stopPropagation()}>
         {title && <h3>{title}</h3>}
         {children}
         {footer && <div className="modal-footer">{footer}</div>}

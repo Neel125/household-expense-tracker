@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Field, Select } from '../ui';
+import { fmtINR } from '../../lib/format';
+
+const fmtPct = (n) => (Number(n) > 0 ? `${Number(n)}% p.a.` : 'no rate set');
 
 const TYPES = ['Expense', 'Income', 'Investment', 'Loan', 'CC Repayment'];
 const PAYMENT_MODES = ['UPI', 'Credit Card', 'Cash', 'Auto Debit', 'Debit Card', 'Net Banking'];
@@ -19,6 +22,8 @@ const BLANK = {
   member: '',
   categoryId: '',
   merchant: '',
+  investmentId: '',
+  debtId: '',
 };
 
 function fromTxn(t, defaultMember) {
@@ -35,17 +40,26 @@ function fromTxn(t, defaultMember) {
     member: t.member || defaultMember || '',
     categoryId: t.categoryId ?? '',
     merchant: t.merchant || '',
+    investmentId: t.investmentId ?? '',
+    debtId: t.debtId ?? '',
   };
 }
 
 // The one form for adding and editing. `editingTxn` switches it to edit
 // mode. Providers and settle-targets come from the household's accounts,
 // categories from its category list — no hardcoded bank names.
+//
+// An Investment row can name the holding it pays into and a Loan row the
+// debt it pays down. That link is what makes the Portfolio page's figures
+// move on their own: the backend amortises linked EMIs and sums linked
+// contributions rather than asking the user to keep two numbers in step.
 export default function TransactionForm({
   editingTxn,
   accounts,
   categories,
   members,
+  investments = [],
+  debts = [],
   defaultMember,
   onSave,
   onCancel,
@@ -67,6 +81,8 @@ export default function TransactionForm({
 
   const isIncome = form.type === 'Income';
   const showSettle = form.type === 'CC Repayment' || form.type === 'Loan';
+  const showInvestmentLink = form.type === 'Investment';
+  const showDebtLink = form.type === 'Loan';
 
   const providerOptions = useMemo(
     () => accounts.filter((a) => !a.archived).map((a) => a.name),
@@ -81,6 +97,16 @@ export default function TransactionForm({
     return form.member && !names.includes(form.member) ? [form.member, ...names] : names;
   }, [members, form.member]);
   const activeCategories = useMemo(() => categories.filter((c) => !c.archived), [categories]);
+  // Loans already paid off stay selectable while editing an old EMI, but
+  // are not offered for a new one.
+  const openDebts = useMemo(
+    () => debts.filter((d) => !d.isClosed || String(d.id) === String(form.debtId)),
+    [debts, form.debtId]
+  );
+  const selectedDebt = useMemo(
+    () => debts.find((d) => String(d.id) === String(form.debtId)),
+    [debts, form.debtId]
+  );
 
   async function submit(e) {
     e.preventDefault();
@@ -101,6 +127,10 @@ export default function TransactionForm({
       member: form.member || defaultMember || '',
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       merchant: form.merchant.trim(),
+      // Sent only for the type each link belongs to. The backend drops a
+      // mismatched link anyway; not sending it keeps the payload honest.
+      investmentId: showInvestmentLink && form.investmentId ? Number(form.investmentId) : null,
+      debtId: showDebtLink && form.debtId ? Number(form.debtId) : null,
     };
     const ok = await onSave(payload);
     setBusy(false);
@@ -172,6 +202,53 @@ export default function TransactionForm({
         {showSettle && (
           <Field label={form.type === 'CC Repayment' ? 'Settles card' : 'Loan account'}>
             <Select value={form.account} onChange={(e) => set('account', e.target.value)} placeholder="—" options={settleOptions} />
+          </Field>
+        )}
+        {showInvestmentLink && (
+          <Field
+            label="Adds to investment"
+            hint={
+              investments.length
+                ? 'Optional. Linking adds this amount to the holding on the Portfolio page.'
+                : 'Add a holding on the Portfolio page first.'
+            }
+          >
+            <Select
+              value={form.investmentId}
+              onChange={(e) => set('investmentId', e.target.value)}
+              placeholder="— not linked —"
+            >
+              {investments.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {showDebtLink && (
+          <Field
+            label="Pays down loan"
+            hint={
+              selectedDebt
+                ? `${fmtPct(selectedDebt.annualRatePct)} — interest is worked out on the balance and the rest reduces the principal.`
+                : debts.length
+                  ? 'Optional. Linking splits this EMI into interest and principal.'
+                  : 'Add a loan on the Portfolio page first.'
+            }
+          >
+            <Select
+              value={form.debtId}
+              onChange={(e) => set('debtId', e.target.value)}
+              placeholder="— not linked —"
+            >
+              {openDebts.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.outstandingNow > 0 ? ` · ${fmtINR(d.outstandingNow)} left` : ''}
+                </option>
+              ))}
+            </Select>
           </Field>
         )}
         <Field label="Logged by">

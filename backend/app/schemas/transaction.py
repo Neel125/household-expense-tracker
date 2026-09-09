@@ -15,6 +15,8 @@ class TransactionIn(CamelModel):
     member: str = ""
     category_id: Optional[int] = None
     merchant: str = ""
+    investment_id: Optional[int] = None
+    debt_id: Optional[int] = None
 
 
 class TransactionOut(CamelModel):
@@ -30,5 +32,7 @@ class TransactionOut(CamelModel):
     member: str
     category_id: Optional[int] = None
     merchant: str
+    investment_id: Optional[int] = None
+    debt_id: Optional[int] = None
     created_at: str = ""
     updated_at: Optional[str] = None

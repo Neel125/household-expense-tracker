@@ -25,6 +25,12 @@ repositories → models), backed by **PostgreSQL** (SQLite for local dev).
   balance.
 - **Goals** — emergency fund, vacation, education, etc., with progress
   and manual contributions.
+- **Portfolio** — FDs, RDs, SIPs, stocks and gold on one side; home, car,
+  personal and consumer loans on the other. Log an SIP instalment or a
+  loan EMI as a transaction and **link it to the holding**: contributions
+  add themselves up, and each EMI is split into interest and principal so
+  the outstanding balance comes down on its own. See
+  [Portfolio](#portfolio-investments-loans-and-the-transactions-that-move-them).
 - **Rewards** — Finance Coins earned for financial discipline (never for
   spending), a tracking streak, short-term challenges, levels and a
   Financial Health Score. See [Rewards and Finance Coins](#rewards-and-finance-coins).
@@ -49,6 +55,8 @@ expense-tracker/
 │   │   ├── repositories/      data access (household-scoped, generic base)
 │   │   ├── services/          business logic + invariants
 │   │   │   ├── events.py        in-process domain event bus
+│   │   │   ├── portfolio_math.py    amortisation + contribution growth
+│   │   │   ├── portfolio_service.py holdings joined with their transactions
 │   │   │   ├── reward_rules.py  the reward catalogue (coins, levels, challenges)
 │   │   │   ├── coin_ledger.py   the only writer of coins
 │   │   │   ├── rewards_service.py   the reward engine
@@ -253,6 +261,74 @@ and `DELETE /api/rewards/challenges/{key}`.
   Subscriptions-category merchant billed for three straight months and
   then absent counts as cancelled. Nobody has to remember to tell the app.
 
+## Portfolio: investments, loans and the transactions that move them
+
+The Portfolio page holds two lists — investments (FD, RD, SIP, mutual
+funds, stocks, bonds, gold, PPF/EPF) and debts (home, car, personal,
+consumer, education, business loans, credit-card debt). Each can be
+maintained by hand, but the point is not to have to.
+
+**Link a transaction to a holding and the holding keeps itself up to
+date.** On the Add Transaction form, an `Investment` row gets an *Adds to
+investment* picker and a `Loan` row gets a *Pays down loan* picker:
+
+- **Investment contributions add up.** Every linked `Investment`
+  transaction counts toward the holding's invested total. Where an
+  expected return is set, each contribution is also grown from its own
+  date to today, which gives a projected value — useful for an RD or FD,
+  where the maturity value is just arithmetic, and a rough guide for a
+  SIP until you enter the real number. Type a **current value** and that
+  wins; leave it at 0 and the projection is shown, labelled as such.
+- **Loan EMIs are split into interest and principal.** Interest is
+  charged on the balance outstanding at the time of the payment, for the
+  time since the previous one; whatever the payment covers beyond that
+  reduces the principal. So a regular EMI on a ₹31.6L home loan at 8.6%
+  splits roughly ₹22,500 interest / ₹19,500 principal, while a
+  part-prepayment made three days after an EMI accrues almost no interest
+  and is nearly all principal. **EMI split** on each loan shows the
+  per-payment breakdown and the running balance.
+
+### The two figures you still type in
+
+`Opening invested` and `Opening outstanding` are the balances **tracking
+started from** — money that went in, or debt that was run up, before you
+began logging transactions against the holding. Linked transactions stack
+on top of those, and both halves are always shown separately (*"6 logged
+contributions · ₹48,000 on top of ₹40,000 opening"*), so if you
+accidentally count the same instalment twice you can see it rather than
+having to trust a single mystery total.
+
+### Derived, not stored
+
+Nothing about a linked holding is written to the database. `contributed`,
+`totalInvested`, `projectedValue`, `outstandingNow`, `principalRepaid`
+and `interestPaid` are all recomputed from the transactions on every read
+(`app/services/portfolio_math.py`).
+
+The alternative — adjusting a stored balance on each write — needs a
+per-transaction record of what was applied so an edit or a delete can be
+undone, and *still* gets the split wrong when a payment is back-dated,
+because the interest depends on the balance at that moment. Replaying the
+payments in date order is the only way to be right about both, and it
+self-heals: correct a transaction's amount or date, or delete it, and
+every figure downstream is right on the next read. Two nullable columns
+on `transaction` (`investment_id`, `debt_id`) are the entire schema change.
+
+The read model is also the authority on when a loan is **closed**, so a
+loan paid off by its final EMI earns the same payoff coins as one marked
+settled by hand (₹1,000 for a home loan, 500 for a car loan, 100 for the
+rest).
+
+A link only counts for the transaction type it belongs to: re-type an EMI
+as an expense and it stops paying the loan down; type it back and it
+resumes. Links are checked against the household on write, so one
+household's EMI can never touch another's loan.
+
+The API is `GET /api/investments` and `GET /api/debts` (both already
+carry the derived figures), `GET /api/investments/{id}` for a holding
+with its contributions, and `GET /api/debts/{id}/schedule` for the
+interest/principal split of every EMI.
+
 ## The core idea: credit card expense vs. repayment
 
 A credit card purchase is logged as an expense the day you make it
@@ -380,6 +456,10 @@ the caller's household so every query is scoped to it.
 - **New necessity categories or transaction types**: edit the `<option>`
   lists in `frontend/src/components/AddTransaction.jsx` and the matching
   logic in `frontend/src/lib/compute.js`.
+- **New investment or debt kinds**: add the string to
+  `INVESTMENT_KINDS` / `DEBT_KINDS` in `backend/app/models/` and to the
+  matching registry at the top of `frontend/src/pages/PortfolioPage.jsx`.
+  The linking, amortisation and projection are kind-agnostic.
 - **New reward rules**: add a `Rule` to `RULES` in
   `backend/app/services/reward_rules.py` (that also feeds the "how coins
   are earned" table in the UI, so the two can't disagree), then award it

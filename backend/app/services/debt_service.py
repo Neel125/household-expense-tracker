@@ -1,9 +1,15 @@
 """Household debts (home/car/personal/consumer loans and other EMIs).
 
-The service publishes a single reward-worthy event: DEBT_COMPLETED, when
-a loan's outstanding balance drops from positive to zero. The handler
-translates the debt's *kind* into the appropriate coin tier (home vs car
-vs other) — this layer only reports the fact.
+This service owns a debt's own terms — lender, rate, EMI, tenure. What
+is actually still owed is not stored here: `outstanding` is the balance
+tracking began from, and the linked `Loan` transactions amortise it (see
+services.portfolio_math). So the payoff test asks the portfolio read
+model rather than trusting the column.
+
+It publishes a single reward-worthy event: DEBT_COMPLETED, when a loan
+that had something left to pay no longer does. The handler translates the
+debt's *kind* into the appropriate coin tier (home vs car vs other) —
+this layer only reports the fact.
 """
 from typing import Optional
 
@@ -16,12 +22,14 @@ from app.repositories.repositories import DebtRepository
 from app.schemas.debt import DebtIn
 from app.services import events
 from app.services.errors import NotFoundError, ValidationError
+from app.services.portfolio_service import PortfolioService
 
 
 class DebtService:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.debts = DebtRepository(session)
+        self.portfolio = PortfolioService(session)
 
     def list(self, household_id: int):
         return self.debts.list(household_id)
@@ -53,17 +61,21 @@ class DebtService:
         obj = self.debts.get(household_id, obj_id)
         if not obj:
             raise NotFoundError("Debt not found")
-        # Snapshot the "before" outstanding so we can tell whether this
-        # save is the one that actually closed the loan. Reading it here
+        # Snapshot whether the loan was already closed, so we can tell
+        # whether *this* save is the one that closed it. Reading it here
         # (before the setattr loop) avoids depending on session state.
-        previous_outstanding = float(obj.outstanding or 0)
+        # `outstanding` alone can't answer that any more — it is only the
+        # balance tracking started from, and linked EMIs pay it down.
+        _, before = self.portfolio.debt_view(household_id, obj_id)
+        was_closed = before.is_closed
 
         for k, v in self._validate(data).items():
             setattr(obj, k, v)
         obj.updated_at = now_iso()
         obj = self.debts.save(obj)
 
-        if previous_outstanding > 0 and float(obj.outstanding or 0) == 0:
+        _, after = self.portfolio.debt_view(household_id, obj_id)
+        if not was_closed and after.is_closed:
             self._announce_completed(obj, actor_id)
         return obj
 

@@ -11,7 +11,7 @@ export default function AddTransactionPage() {
   const editingTxn = state?.txn || null;
   const prefillMember = state?.member || '';
 
-  const { accounts, categories, members, profile, saveTransaction } = useData();
+  const { accounts, categories, members, investments, debts, profile, saveTransaction } = useData();
 
   async function onSave(payload) {
     const ok = await saveTransaction(editingTxn?.id, payload);
@@ -31,6 +31,8 @@ export default function AddTransactionPage() {
           accounts={accounts}
           categories={categories}
           members={members}
+          investments={investments}
+          debts={debts}
           defaultMember={prefillMember || profile}
           onSave={onSave}
           onCancel={editingTxn ? () => navigate('/transactions') : undefined}

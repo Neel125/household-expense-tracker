@@ -24,6 +24,15 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "contact_number": "TEXT NOT NULL DEFAULT ''",
         "avatar_url": "TEXT NOT NULL DEFAULT ''",
     },
+    # Portfolio links. Nullable with no default, so every existing row
+    # stays unlinked and nothing is retroactively counted as a
+    # contribution or an EMI. No FK constraint is added here: SQLite
+    # can't add one to an existing table, and the service validates the
+    # target belongs to the household before writing either column.
+    "transaction": {
+        "investment_id": "INTEGER",
+        "debt_id": "INTEGER",
+    },
 }
 
 

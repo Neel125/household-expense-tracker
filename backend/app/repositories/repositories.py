@@ -2,7 +2,7 @@
 model; the few with extra query needs add focused methods."""
 from typing import Optional, Sequence
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, select
 
 from app.models import (
@@ -34,6 +34,38 @@ class TransactionRepository(HouseholdRepository[Transaction]):
             select(Transaction)
             .where(Transaction.household_id == household_id)
             .order_by(Transaction.date.desc())
+        )
+        return self.session.exec(stmt).all()
+
+    def for_investment(self, household_id: int, investment_id: int) -> Sequence[Transaction]:
+        """Contributions to one holding. The type filter matters: a row
+        re-typed away from Investment stops counting even if the link is
+        still on it."""
+        stmt = select(Transaction).where(
+            Transaction.household_id == household_id,
+            Transaction.investment_id == investment_id,
+            Transaction.type == "Investment",
+        )
+        return self.session.exec(stmt).all()
+
+    def for_debt(self, household_id: int, debt_id: int) -> Sequence[Transaction]:
+        """EMIs against one debt."""
+        stmt = select(Transaction).where(
+            Transaction.household_id == household_id,
+            Transaction.debt_id == debt_id,
+            Transaction.type == "Loan",
+        )
+        return self.session.exec(stmt).all()
+
+    def portfolio_linked(self, household_id: int) -> Sequence[Transaction]:
+        """Every row linked to a holding, in one query — so a portfolio
+        listing costs one round trip rather than one per holding."""
+        stmt = select(Transaction).where(
+            Transaction.household_id == household_id,
+            or_(
+                and_(Transaction.investment_id.is_not(None), Transaction.type == "Investment"),
+                and_(Transaction.debt_id.is_not(None), Transaction.type == "Loan"),
+            ),
         )
         return self.session.exec(stmt).all()
 

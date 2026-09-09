@@ -51,6 +51,7 @@ from app.services.events import (
     subscribe,
 )
 from app.services.health_service import HealthReport, HealthService
+from app.services.portfolio_service import PortfolioService
 from app.services.reward_rules import Level
 
 # How far back a settle sweep will pay. Older months are still scored
@@ -102,6 +103,7 @@ class RewardsService:
         self.goals = GoalRepository(session)
         self.investments = InvestmentRepository(session)
         self.debts = DebtRepository(session)
+        self.portfolio = PortfolioService(session)
 
     # ------------------------------------------------------------- reactions
     def on_expense_tracked(self, event: DomainEvent) -> None:
@@ -508,8 +510,11 @@ class RewardsService:
                     reference_id=str(inv.id),
                     note=f"“{inv.name}” reached maturity",
                 )
-        for debt in self.debts.list(household_id):
-            if float(debt.outstanding or 0) > 0:
+        # `Debt.outstanding` is only the balance tracking started from —
+        # linked EMIs are what actually close a loan, so the portfolio
+        # read model is the authority on which ones are paid off.
+        for debt, view in self.portfolio.debt_views(household_id):
+            if not view.is_closed:
                 continue
             if float(debt.principal or 0) <= 0:
                 continue

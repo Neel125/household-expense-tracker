@@ -438,6 +438,7 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
   box-shadow:var(--shadow); border:1px solid var(--border);
   max-height:calc(100dvh - 40px); overflow-y:auto;
 }
+.modal-wide{ max-width:660px; }
 .modal h3{ margin:0 0 4px; font-size:17px; }
 .modal p{ font-size:12.5px; color:var(--text-secondary); margin:0 0 14px; }
 .modal-footer{ margin-top:16px; display:flex; gap:10px; justify-content:flex-end; }
@@ -637,7 +638,7 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
 .member-mini-name{ font-size:13.5px; font-weight:600; display:flex; align-items:center; }
 
 /* ============================== PORTFOLIO =============================== */
-.asset-list{ display:flex; flex-direction:column; gap:12px; }
+.asset-list{ display:flex; flex-direction:column; gap:12px; container-type:inline-size; }
 .asset-row{
   display:grid;
   grid-template-columns:44px minmax(0,1fr) auto auto;
@@ -656,6 +657,9 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
   color:var(--status-critical);
 }
 .asset-main{ min-width:0; }
+/* The payoff meter reads as a unit; without a cap it stretches the label
+   and the figure to opposite ends of a full-width row. */
+.asset-progress{ max-width:420px; margin-top:6px; }
 .asset-title{
   font-weight:600; font-size:14.5px; display:flex; align-items:center;
   gap:8px; flex-wrap:wrap;
@@ -668,6 +672,10 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
 .up-good{ color:var(--status-good-text); }
 .up-bad{ color:var(--status-critical); }
 
+/* Stack the row's figures and actions under the body when there isn't
+   room for four columns. Keyed off the list's own width (container
+   query) as well as the viewport, because the same row is also rendered
+   inside half-width cards. */
 @media (max-width:640px){
   .asset-row{
     grid-template-columns:44px minmax(0,1fr);
@@ -680,6 +688,19 @@ svg text{ font-family:"IBM Plex Sans", sans-serif; }
   .asset-row > .asset-main   { grid-area:main; }
   .asset-row > .asset-figures{ grid-area:fig; text-align:left; }
   .asset-row > .asset-actions{ grid-area:act; flex-direction:row; }
+}
+@container (max-width:560px){
+  .asset-row{
+    grid-template-columns:44px minmax(0,1fr);
+    grid-template-areas:
+      "icon main"
+      "fig fig"
+      "act act";
+  }
+  .asset-row > .asset-icon   { grid-area:icon; }
+  .asset-row > .asset-main   { grid-area:main; }
+  .asset-row > .asset-figures{ grid-area:fig; text-align:left; }
+  .asset-row > .asset-actions{ grid-area:act; flex-direction:row; flex-wrap:wrap; }
 }
 
 /* ============================== REWARDS =============================== */

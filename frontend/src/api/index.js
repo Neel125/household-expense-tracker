@@ -66,12 +66,17 @@ export const api = {
   },
   investments: {
     list: () => http.get('/api/investments'),
+    // The holding plus every linked contribution — fetched on demand by
+    // the Portfolio page's detail modal, not on every page load.
+    get: (id) => http.get(`/api/investments/${id}`),
     create: (data) => http.post('/api/investments', data),
     update: (id, data) => http.put(`/api/investments/${id}`, data),
     remove: (id) => http.del(`/api/investments/${id}`),
   },
   debts: {
     list: () => http.get('/api/debts'),
+    // The interest/principal split of every EMI logged against a loan.
+    schedule: (id) => http.get(`/api/debts/${id}/schedule`),
     create: (data) => http.post('/api/debts', data),
     update: (id, data) => http.put(`/api/debts/${id}`, data),
     remove: (id) => http.del(`/api/debts/${id}`),

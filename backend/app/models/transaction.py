@@ -23,5 +23,12 @@ class Transaction(SQLModel, table=True):
     member: str = ""  # who logged it (member name)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     merchant: str = ""  # where it was spent, for merchant analysis
+    # Portfolio links. An `Investment` row makes this a contribution to a
+    # holding; a `Loan` row makes it an EMI against a debt, and
+    # services.portfolio_math splits it into interest and principal.
+    # Both nullable: a transaction is perfectly valid unlinked, which is
+    # what every row created before this feature is.
+    investment_id: Optional[int] = Field(default=None, foreign_key="investment.id")
+    debt_id: Optional[int] = Field(default=None, foreign_key="debt.id")
     created_at: str = ""
     updated_at: Optional[str] = None
