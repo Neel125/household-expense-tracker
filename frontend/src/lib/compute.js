@@ -20,6 +20,20 @@ export function monthTxns(transactions, scope, profile, mk) {
   return inScope(transactions, scope, profile).filter((t) => monthKey(t.date) === mk);
 }
 
+// The same, cut off at a day of the month. Comparing a month in progress
+// against a whole previous month makes every category look like it
+// collapsed, so the dashboard compares the same slice of both.
+// `maxDay` of 0 means "no cutoff".
+export function monthTxnsUpTo(transactions, scope, profile, mk, maxDay) {
+  const list = monthTxns(transactions, scope, profile, mk);
+  if (!maxDay) return list;
+  return list.filter((t) => Number((t.date || '').slice(8, 10)) <= maxDay);
+}
+
+export function thisMonthKey(today = new Date()) {
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // The shared arithmetic: hand it any set of transactions (a month, a
 // person, a person's month) and it applies the accrual-vs-cash rules once.
 function aggregate(list) {
@@ -63,6 +77,11 @@ function aggregate(list) {
 
 export function computeMonth(transactions, scope, profile, mk) {
   const list = monthTxns(transactions, scope, profile, mk);
+  return { list, ...aggregate(list) };
+}
+
+export function computeMonthUpTo(transactions, scope, profile, mk, maxDay) {
+  const list = monthTxnsUpTo(transactions, scope, profile, mk, maxDay);
   return { list, ...aggregate(list) };
 }
 
@@ -188,6 +207,18 @@ export function merchantBreakdown(list, limit = 8) {
 export function monthlyIncome(monthAgg, incomeSources) {
   const recurring = sum((incomeSources || []).filter((s) => s.active), (s) => Number(s.monthlyAmount) || 0);
   return recurring + (monthAgg.income || 0);
+}
+
+// The month's outflow, decomposed into the three things money actually
+// went to. These sum exactly to `accrual`, which is why the dashboard can
+// show them as one stacked bar:
+//   accrual = Expense + Investment + Loan
+//   consumption = Expense + Loan   (so Expense = consumption − loanPaid)
+export function outflowSplit(monthAgg) {
+  const investments = monthAgg.investments || 0;
+  const loanPaid = monthAgg.loanPaid || 0;
+  const expense = Math.max(0, (monthAgg.consumption || 0) - loanPaid);
+  return { expense, investments, loanPaid, total: expense + investments + loanPaid };
 }
 
 export function prevMonthKey(mk) {

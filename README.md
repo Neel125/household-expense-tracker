@@ -34,9 +34,11 @@ repositories → models), backed by **PostgreSQL** (SQLite for local dev).
 - **Rewards** — Finance Coins earned for financial discipline (never for
   spending), a tracking streak, short-term challenges, levels and a
   Financial Health Score. See [Rewards and Finance Coins](#rewards-and-finance-coins).
-- **Dashboard analytics** — category breakdown, income vs expenses,
-  savings rate, month-over-month comparison, highest spending categories,
-  and merchant-wise analysis.
+- **Dashboard** — a plain-language insight strip, where every rupee of
+  the month went (expenses vs investments vs loan payments), expense-vs-
+  investment trends, a portfolio and debt snapshot, cumulative
+  saved-and-invested curves, category and needs/wants breakdowns, and
+  merchant-wise analysis. See [The dashboard](#the-dashboard).
 
 ## How it's put together
 
@@ -77,8 +79,10 @@ expense-tracker/
         │                       ProgressBar, Pill, MonthSelect, …)
         ├── components/layout/  AppLayout, Sidebar, ProtectedRoute
         ├── components/transactions/  TransactionTable, TransactionForm
-        ├── components/charts/  dependency-free SVG Donut/Bar charts
+        ├── components/charts/  dependency-free SVG Donut/Bar/Line charts
         ├── lib/compute.js     accrual/necessity/analytics formulas
+        ├── lib/insights.js    the dashboard's plain-language observations
+        ├── lib/portfolioMeta.js  investment/debt kind labels, icons, colours
         └── pages/             Dashboard, Add, Transactions, Accounts, Income,
                                Budgets, Goals, Rewards, Family, Settings, auth/
 ```
@@ -260,6 +264,52 @@ and `DELETE /api/rewards/challenges/{key}`.
 - **Cancelled subscriptions are inferred, not self-reported** — a
   Subscriptions-category merchant billed for three straight months and
   then absent counts as cancelled. Nobody has to remember to tell the app.
+
+## The dashboard
+
+Laid out as a story rather than a wall of charts — each section answers
+one question, in this order:
+
+1. **At a glance** — net worth, income, spent, invested, savings rate.
+2. **Insights** — a strip of one-line observations, each generated only
+   when it applies (`frontend/src/lib/insights.js`). A household with no
+   loans never sees an EMI tile rather than one reading "0%". The
+   thresholds behind the wording — 20% savings, 15% invested, 40% EMI
+   ceiling — are collected in one exported `TARGETS` object.
+3. **Where the money went** — the month's outflow as one stacked bar:
+   expenses, investments, loan payments, and whatever is left of income.
+   These decompose the accrual total exactly (`accrual = Expense +
+   Investment + Loan`), which is why a bar is the right shape for it — the
+   parts really do add up to the whole. Beside it, the same three series
+   over six months, so you can see whether the investment share is
+   growing.
+4. **Building wealth** — portfolio value against what was put in, an
+   allocation donut by asset class, and cumulative *net saved* vs
+   *invested* over a year. The cumulative curves are the one place the
+   dashboard shows a trend rather than a snapshot: the shape answers "are
+   we putting money away faster than we used to?".
+5. **What you owe** — loan balances with payoff progress, and what the
+   logged EMIs actually bought: principal vs interest, split by
+   [the portfolio amortisation](#portfolio-investments-loans-and-the-transactions-that-move-them).
+6. **Spending detail** — category donut, ranked categories with their
+   change, needs vs wants.
+7. **Month over month** and **merchant analysis**.
+
+### Two rules the numbers follow
+
+- **Like-for-like comparison.** A month in progress is compared against
+  the *same day range* of the month before. Comparing nine days against a
+  full month made every category look like it had collapsed, and turned
+  every insight built on the comparison into a false alarm. Card hints say
+  what the baseline is ("vs 1–9 Aug").
+- **A budget is a spending envelope.** Budget usage is measured against
+  day-to-day expenses only. Counting an SIP instalment or a loan
+  prepayment as overspend flagged the household's *best* months as its
+  worst.
+
+Charts are still dependency-free SVG (`components/charts/`): `DonutChart`,
+`BarChart` and `LineChart`, plus a `StackedBar` in the UI kit. They draw
+at 1:1 with their container so labels stay ~10px at any width.
 
 ## Portfolio: investments, loans and the transactions that move them
 
@@ -466,9 +516,15 @@ the caller's household so every query is scoped to it.
   from `RewardsService` with a fresh `event_key`. **New challenges**: add
   a `Challenge` there plus an evaluator in `challenge_service.py` —
   nothing else needs to change.
-- **Charts**: `frontend/src/components/charts/DonutChart.jsx` and
-  `BarChart.jsx` are small, dependency-free SVG components — extend them
-  directly rather than pulling in a charting library.
+- **Charts**: `DonutChart.jsx`, `BarChart.jsx` and `LineChart.jsx` in
+  `frontend/src/components/charts/` are small, dependency-free SVG
+  components — extend them directly rather than pulling in a charting
+  library. Series colours come from `--series-1` … `--series-6` in
+  `styles.css`; add a `--series-7` there before using one.
+- **New dashboard insights**: add a builder to
+  `frontend/src/lib/insights.js` and list it in `buildInsights`. Return
+  `null` when the insight doesn't apply — the strip renders only what
+  comes back, and the page shows the first six.
 - **Real-time sync between browsers**: the app reads the API once when it
   loads and re-reads after each change you make, so a second browser
   won't pick up your entries until it's reloaded. If you want live sync,

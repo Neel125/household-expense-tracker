@@ -8,6 +8,7 @@ export { default as Select } from './Select';
 export { default as Modal } from './Modal';
 export { default as StatCard } from './StatCard';
 export { default as ProgressBar } from './ProgressBar';
+export { default as StackedBar } from './StackedBar';
 export { default as Pill } from './Pill';
 export { default as EmptyState } from './EmptyState';
 export { default as SegmentedControl } from './SegmentedControl';
