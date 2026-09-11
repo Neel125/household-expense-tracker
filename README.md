@@ -514,34 +514,36 @@ one process. Put this behind a reverse proxy (Caddy, nginx) for TLS, or
 run it on a platform like Railway/Render/Fly.io/a VPS with a process
 manager (systemd, pm2, or `gunicorn -k uvicorn.workers.UvicornWorker`).
 
-### Render (Docker + managed Postgres)
+### Render (free instances)
 
-`render.yaml` at the repo root is a Blueprint: one web service built from
-the existing `Dockerfile` (UI + API) and a Postgres 16 database. The app
-reads `DATABASE_URL` and `JWT_SECRET` from the environment; `SEED_DATA`
-is off so demo rows are not loaded over your household.
+`render.yaml` deploys a **free** web service (the Docker image: UI + API)
+and a **free** Postgres 16 database. No card is required on the Hobby
+workspace, but free Postgres **expires after 30 days** and has **no
+backups** — keep `docker compose` running locally as the real copy.
 
-1. Commit and push this repo to GitHub (Render deploys from git).
+1. Commit and push this repo to GitHub (Render only builds what is on
+   the branch you connect).
 2. [Render Dashboard](https://dashboard.render.com) → **New** →
-   **Blueprint**. Connect the repo and apply `render.yaml`.
-3. Wait until `ledger-and-card` is Live. Open
-   `https://ledger-and-card.onrender.com` (the exact URL is on the
-   service page) — the database is empty until you restore.
-4. Copy your local Docker Compose data onto Render Postgres:
+   **Blueprint**. Connect the repo. Confirm both resources show plan
+   **Free**, then apply.
+3. Wait until `ledger-and-card` is Live. First request can take ~1
+   minute while the free instance wakes. Open the URL on the service
+   page (`https://ledger-and-card.onrender.com`).
+4. Copy local Docker Compose data onto Render:
 
 ```bash
+sudo apt install -y postgresql-client   # once, for psql
 ./scripts/dump-local-db.sh
 RENDER_DATABASE_URL='postgresql://USER:PASS@HOST/ledger?sslmode=require' \
   ./scripts/restore-to-render.sh
 ```
 
-The External connection string is on **ledger-db → Info**. After the
-restore, **Manual Deploy → Restart** the web service so it picks up the
-data. Do **not** run `docker compose down -v` locally — that deletes
-`ledger-pg`.
+The External connection string is on **ledger-db → Info**. Then
+**Manual Deploy → Restart** the web service.
 
-Web and database must stay in the **same region** (the Blueprint uses
-`singapore`) so the injected `DATABASE_URL` is the private network URL.
+Free web services sleep after 15 minutes idle. Free Postgres is 1 GB,
+one per workspace, and is deleted if you do not upgrade within 14 days
+after the 30-day expiry. Do **not** run `docker compose down -v` locally.
 
 **Split option** — deploy `frontend/dist` to a static host (Vercel,
 Netlify, Cloudflare Pages) and the backend anywhere that runs Python
