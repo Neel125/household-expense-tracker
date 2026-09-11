@@ -22,6 +22,7 @@ from app.models import (
     Transaction,
     User,
 )
+from app.models.transaction import LOAN_PAYMENT_TYPES
 from app.repositories.base import HouseholdRepository
 
 
@@ -49,11 +50,11 @@ class TransactionRepository(HouseholdRepository[Transaction]):
         return self.session.exec(stmt).all()
 
     def for_debt(self, household_id: int, debt_id: int) -> Sequence[Transaction]:
-        """EMIs against one debt."""
+        """EMIs and partial payments against one debt."""
         stmt = select(Transaction).where(
             Transaction.household_id == household_id,
             Transaction.debt_id == debt_id,
-            Transaction.type == "Loan",
+            Transaction.type.in_(LOAN_PAYMENT_TYPES),
         )
         return self.session.exec(stmt).all()
 
@@ -64,7 +65,10 @@ class TransactionRepository(HouseholdRepository[Transaction]):
             Transaction.household_id == household_id,
             or_(
                 and_(Transaction.investment_id.is_not(None), Transaction.type == "Investment"),
-                and_(Transaction.debt_id.is_not(None), Transaction.type == "Loan"),
+                and_(
+                    Transaction.debt_id.is_not(None),
+                    Transaction.type.in_(LOAN_PAYMENT_TYPES),
+                ),
             ),
         )
         return self.session.exec(stmt).all()

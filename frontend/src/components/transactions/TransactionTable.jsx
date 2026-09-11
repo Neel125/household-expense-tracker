@@ -1,7 +1,7 @@
 import { fmtINR, shortDate } from '../../lib/format';
 import Pill from '../ui/Pill';
 
-const TYPE_TONE = { Income: 'good', 'CC Repayment': 'debt' };
+const TYPE_TONE = { Income: 'good', 'CC Repayment': 'debt', Loan: 'debt', 'Loan Partial': 'debt' };
 
 // Shared by the Transactions and Family views. showMember=false drops the
 // "Who" column. A categories map (id -> {name,color}) renders category
@@ -57,6 +57,8 @@ export default function TransactionTable({
                 <td>
                   {t.name}
                   {t.merchant && <span className="note"> · {t.merchant}</span>}
+                  {t.type === 'Loan Partial' && <span className="note"> · partial</span>}
+                  {t.type === 'Loan' && <span className="note"> · EMI</span>}
                   <span className="row-tag">
                     {isIncome ? (
                       <Pill tone="good">Income</Pill>

@@ -222,12 +222,54 @@ def _cut_eating_out(ctx: Context) -> Outcome:
     )
 
 
+def _log_five_days(ctx: Context) -> Outcome:
+    monday, sunday = _week_bounds(ctx.reference)
+    tracked = len(_txn_dates(_between(ctx.all_txns, monday, sunday)))
+    window_over = ctx.today > sunday
+    return Outcome(
+        current=tracked,
+        target=5,
+        caption=f"{tracked} of 5 days logged this week",
+        achieved=tracked >= 5,
+        window_over=window_over,
+    )
+
+
+def _needs_first(ctx: Context) -> Outcome:
+    month_txns = [
+        t
+        for t in month_math.in_month(ctx.all_txns, ctx.period)
+        if t.type not in {"Income", "CC Repayment"}
+    ]
+    needs = sum(t.amount or 0 for t in month_txns if (t.necessity or "") == "Need")
+    wants = sum(t.amount or 0 for t in month_txns if (t.necessity or "") == "Want")
+    window_over = month_math.is_complete(ctx.period, ctx.today)
+    # Progress is how far Needs are ahead of Wants. Target is "at least
+    # ₹1 more in Needs" so a month with nothing tagged isn't a free win.
+    ahead = needs - wants
+    spent = needs + wants
+    return Outcome(
+        current=max(0.0, ahead),
+        target=1 if spent > 0 else 1,
+        caption=(
+            f"Needs ₹{round(needs):,} vs Wants ₹{round(wants):,}"
+            if spent > 0
+            else "Tag some expenses as Need or Want to start"
+        ),
+        achieved=spent > 0 and needs > wants,
+        window_over=window_over,
+        eligible=True,
+    )
+
+
 EVALUATORS: dict[str, Callable[[Context], Outcome]] = {
     "no_spend_weekend": _no_spend_weekend,
     "no_shopping_7_days": _no_shopping_7_days,
     "track_every_expense": _track_every_expense,
     "save_5000": _save_5000,
     "cut_eating_out": _cut_eating_out,
+    "log_five_days": _log_five_days,
+    "needs_first": _needs_first,
 }
 
 

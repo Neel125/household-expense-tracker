@@ -1,0 +1,43 @@
+# Render Blueprint — one web service (Docker image: UI + API) + Postgres.
+# Dashboard: New → Blueprint → this repo. Both resources must stay in the
+# same region so DATABASE_URL is the internal (private) connection string.
+#
+# Plans: starter web + basic-256mb Postgres are the cheapest persistent
+# combo. If your account still offers `free` for web services you can
+# change the web plan; do not put real household data on free Postgres
+# (it can be wiped). Singapore is closest to India; change both regions
+# together if you prefer oregon/frankfurt.
+
+services:
+  - type: web
+    name: ledger-and-card
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ledger-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_DATA
+        value: "false"
+      - key: ALLOWED_ORIGINS
+        value: "*"
+
+databases:
+  - name: ledger-db
+    plan: basic-256mb
+    region: singapore
+    postgresMajorVersion: "16"
+    databaseName: ledger
+    user: ledger
+    # Open so you can restore the local Docker dump from your laptop.
+    # After the restore, you can lock this down in the Render dashboard.
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: restore-from-anywhere-then-tighten

@@ -68,7 +68,7 @@ def aggregate(txns: Sequence[Transaction]) -> MonthTotals:
     spendable = [t for t in txns if t.type not in _NOT_SPEND]
     return MonthTotals(
         spend=sum(t.amount or 0 for t in spendable),
-        consumption=sum(t.amount or 0 for t in txns if t.type in {"Expense", "Loan"}),
+        consumption=sum(t.amount or 0 for t in txns if t.type in {"Expense", "Loan", "Loan Partial"}),
         txn_income=sum(t.amount or 0 for t in txns if t.type == "Income"),
         investments=sum(t.amount or 0 for t in txns if t.type == "Investment"),
         wants=sum(t.amount or 0 for t in spendable if t.necessity == "Want"),
@@ -105,7 +105,9 @@ def debt_outstanding(txns: Sequence[Transaction], accounts: Sequence[Account]) -
             total += max(0.0, (account.opening_balance or 0) + spend - repaid)
         elif account.type == "loan":
             paid = sum(
-                t.amount or 0 for t in txns if t.type == "Loan" and t.account == account.name
+                t.amount or 0
+                for t in txns
+                if t.type in {"Loan", "Loan Partial"} and t.account == account.name
             )
             total += max(0.0, (account.opening_balance or 0) - paid)
     return total

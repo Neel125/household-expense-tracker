@@ -113,6 +113,126 @@ class ChallengeOut(CamelModel):
         )
 
 
+class GameCardOut(CamelModel):
+    key: str
+    title: str
+    description: str
+    icon: str
+    payout_min: int
+    payout_max: int
+    hint: str
+    played: bool
+    passed: bool
+    coins_awarded: int
+
+    @classmethod
+    def of(cls, status) -> "GameCardOut":
+        return cls.model_validate(status)
+
+
+class QuizQuestionOut(CamelModel):
+    id: str
+    prompt: str
+    options: list[str]
+
+
+class QuizRoundOut(CamelModel):
+    played: bool
+    passed: bool
+    coins_awarded: int
+    pass_score: int
+    questions: list[QuizQuestionOut]
+
+    @classmethod
+    def of(cls, round) -> "QuizRoundOut":
+        return cls(
+            played=round.played,
+            passed=round.passed,
+            coins_awarded=round.coins_awarded,
+            pass_score=round.pass_score,
+            questions=[
+                QuizQuestionOut(id=q.id, prompt=q.prompt, options=list(q.options))
+                for q in round.questions
+            ],
+        )
+
+
+class PuzzleItemOut(CamelModel):
+    id: str
+    label: str = ""
+    term: str = ""
+
+
+class PuzzleRoundOut(CamelModel):
+    played: bool
+    passed: bool
+    coins_awarded: int
+    id: str
+    kind: str
+    title: str
+    prompt: str
+    items: list[PuzzleItemOut]
+    options: list[str] = []
+
+    @classmethod
+    def of(cls, round) -> "PuzzleRoundOut":
+        return cls(
+            played=round.played,
+            passed=round.passed,
+            coins_awarded=round.coins_awarded,
+            id=round.puzzle_id,
+            kind=round.kind,
+            title=round.title,
+            prompt=round.prompt,
+            items=[PuzzleItemOut.model_validate(i) for i in round.items],
+            options=list(round.options),
+        )
+
+
+class WheelSliceOut(CamelModel):
+    coins: int
+    label: str
+    color: str
+
+
+class WheelRoundOut(CamelModel):
+    played: bool
+    passed: bool
+    coins_awarded: int
+    slices: list[WheelSliceOut]
+
+
+class QuizAnswerIn(CamelModel):
+    id: str
+    choice: int
+
+
+class QuizSubmitIn(CamelModel):
+    answers: list[QuizAnswerIn]
+
+
+class PuzzleSubmitIn(CamelModel):
+    id: str
+    choice: Optional[int] = None
+    answers: dict[str, str] = {}
+
+
+class GameResultOut(CamelModel):
+    key: str
+    played: bool
+    passed: bool
+    coins: int
+    message: str
+    score: Optional[int] = None
+    target: Optional[int] = None
+    segment_index: Optional[int] = None
+    balance: int = 0
+
+    @classmethod
+    def of(cls, result) -> "GameResultOut":
+        return cls.model_validate(result)
+
+
 class EarnRuleOut(CamelModel):
     """A row of the "how to earn" table, straight from the catalogue so
     the UI can never disagree with what the engine pays."""
@@ -133,6 +253,7 @@ class RewardsSummaryOut(CamelModel):
     breakdown: list[BreakdownRowOut]
     history: list[CoinRowOut]
     challenges: list[ChallengeOut]
+    games: list[GameCardOut]
     catalog: list[EarnRuleOut]
     daily_cap_remaining: int
     review_month: str
@@ -169,6 +290,7 @@ class RewardsSummaryOut(CamelModel):
                 for row in summary.history
             ],
             challenges=[ChallengeOut.of(s) for s in summary.challenges],
+            games=[GameCardOut.of(g) for g in summary.games],
             catalog=[
                 EarnRuleOut(
                     kind=rule.key,

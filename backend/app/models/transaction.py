@@ -2,6 +2,12 @@ from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
+# The two ways a transaction pays a debt. EMI (`Loan`) is amortised into
+# interest + principal; a partial payment goes entirely to principal.
+TYPE_LOAN = "Loan"
+TYPE_LOAN_PARTIAL = "Loan Partial"
+LOAN_PAYMENT_TYPES = (TYPE_LOAN, TYPE_LOAN_PARTIAL)
+
 
 class Transaction(SQLModel, table=True):
     """One financial entry. The credit-card accrual rules that the
@@ -13,7 +19,7 @@ class Transaction(SQLModel, table=True):
     household_id: int = Field(index=True, foreign_key="household.id")
     date: str  # "YYYY-MM-DD"
     name: str
-    # Expense | Investment | Loan | CC Repayment | Income
+    # Expense | Investment | Loan | Loan Partial | CC Repayment | Income
     type: str
     amount: float
     payment_mode: str = ""  # UPI | Credit Card | Cash | Auto Debit | Debit Card | ...
@@ -24,8 +30,8 @@ class Transaction(SQLModel, table=True):
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     merchant: str = ""  # where it was spent, for merchant analysis
     # Portfolio links. An `Investment` row makes this a contribution to a
-    # holding; a `Loan` row makes it an EMI against a debt, and
-    # services.portfolio_math splits it into interest and principal.
+    # holding; a `Loan` or `Loan Partial` row pays a debt. EMIs are split
+    # into interest and principal; partials reduce principal in full.
     # Both nullable: a transaction is perfectly valid unlinked, which is
     # what every row created before this feature is.
     investment_id: Optional[int] = Field(default=None, foreign_key="investment.id")

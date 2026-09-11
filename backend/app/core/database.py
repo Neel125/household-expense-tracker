@@ -12,7 +12,13 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.core.config import settings
 
 connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
-engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+engine = create_engine(
+    settings.database_url,
+    echo=False,
+    connect_args=connect_args,
+    # Render (and other PaaS) recycle idle connections; ping before use.
+    pool_pre_ping=not settings.is_sqlite,
+)
 
 
 # Additive migrations we can safely run on every startup. Keys are table

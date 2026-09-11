@@ -62,7 +62,6 @@ export default function TransactionsPage() {
           placeholder="Search name, merchant…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 160 }}
         />
         <MonthSelect months={months} value={filterMonth} onChange={setFilterMonth} includeAll />
         <Select value={filterMember} onChange={(e) => setFilterMember(e.target.value)} placeholder="Everyone">

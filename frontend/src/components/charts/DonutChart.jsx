@@ -47,7 +47,7 @@ export default function DonutChart({ data }) {
             <title>{`${s.label}: ${fmtINR(s.value)} (${Math.round((s.value / total) * 100)}%)`}</title>
           </path>
         ))}
-        <text x={cx} y={cy - 3} textAnchor="middle" style={{ fill: 'var(--text-primary)', fontFamily: '"IBM Plex Mono",monospace', fontWeight: 600, fontSize: 16 }}>
+        <text x={cx} y={cy - 3} textAnchor="middle" style={{ fill: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 16 }}>
           {shortINR(total)}
         </text>
         <text x={cx} y={cy + 14} textAnchor="middle" style={{ fill: 'var(--chart-muted)', fontSize: 10 }}>

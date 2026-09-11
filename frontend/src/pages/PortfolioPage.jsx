@@ -77,7 +77,7 @@ function InvestmentModal({ initial, onSave, onClose }) {
   }
 
   return (
-    <Modal title={form.id ? `Edit ${form.name || 'investment'}` : 'Add investment'} onClose={onClose}>
+    <Modal title={form.id ? `Edit ${form.name || 'investment'}` : 'Add investment'} onClose={onClose} size="form">
       <form onSubmit={submit}>
         <div className="form-grid">
           <Field label="Name">
@@ -146,7 +146,7 @@ function DebtModal({ initial, onSave, onClose }) {
   }
 
   return (
-    <Modal title={form.id ? `Edit ${form.name || 'debt'}` : 'Add debt'} onClose={onClose}>
+    <Modal title={form.id ? `Edit ${form.name || 'debt'}` : 'Add debt'} onClose={onClose} size="form">
       <form onSubmit={submit}>
         <div className="form-grid">
           <Field label="Name">
@@ -224,11 +224,11 @@ function DebtScheduleModal({ debt, onClose }) {
   const { loading, error, data } = useDetail(() => api.debts.schedule(debt.id), debt.id);
   const rows = data?.instalments || [];
   return (
-    <Modal title={`${debt.name} — where each EMI went`} onClose={onClose} wide>
+    <Modal title={`${debt.name} — where each payment went`} onClose={onClose} wide>
       <p className="note">
-        Interest is charged on the balance outstanding at the time of each payment; whatever
-        the payment covers beyond that reduces the principal. A payment made soon after the
-        previous one accrues less interest, so a part-prepayment is almost all principal.
+        An EMI is split into interest (on the balance at the time) and principal. A{' '}
+        <strong>partial payment</strong> skips that split — the whole amount comes off the
+        principal, which is what you see on the loan’s outstanding.
       </p>
       {loading ? (
         <EmptyState>Loading the schedule…</EmptyState>
@@ -252,7 +252,10 @@ function DebtScheduleModal({ debt, onClose }) {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.transactionId}>
-                    <td className="cell-date note">{shortDate(r.date)}</td>
+                    <td className="cell-date note">
+                      {shortDate(r.date)}
+                      {r.kind === 'prepay' ? ' · partial' : ''}
+                    </td>
                     <td className="num" style={{ textAlign: 'right' }}>{fmtINR(r.paid)}</td>
                     <td className="num up-bad" style={{ textAlign: 'right' }}>{fmtINR(r.interest)}</td>
                     <td className="num up-good" style={{ textAlign: 'right' }}>{fmtINR(r.principal)}</td>
@@ -540,7 +543,7 @@ export default function PortfolioPage() {
     <section>
       <PageHeader
         title="Portfolio"
-        subtitle="Household assets and debts. Log an Investment transaction against a holding and it adds to the invested total; log a Loan EMI against a debt and it is split into interest and principal, reducing what's outstanding."
+        subtitle="Household assets and debts. Log an Investment transaction against a holding and it adds to the invested total; log a Loan EMI against a debt to split interest and principal, or a Loan partial payment to cut principal in full."
       />
 
       <div className="grid kpi-row">
@@ -612,7 +615,7 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      <div className="stacked" style={{ marginTop: 16 }}>
+      <div className="grid two-col-even" style={{ marginTop: 16 }}>
         <Card
           title="Investments"
           hint={`${investments.length} item${investments.length === 1 ? '' : 's'}`}

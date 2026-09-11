@@ -1,6 +1,8 @@
+import { useState } from 'react';
+import { GameCard, PuzzleModal, QuizModal, SpinModal } from '../components/games/GamesPanel';
 import { Button, Card, EmptyState, PageHeader, Pill, ProgressBar } from '../components/ui';
-import { monthLabel, shortDate } from '../lib/format';
 import { useData } from '../context/DataContext';
+import { monthLabel, shortDate } from '../lib/format';
 
 const fmtCoins = (n) => (Math.round(Number(n) || 0)).toLocaleString('en-IN');
 
@@ -177,9 +179,15 @@ function EarnCard({ catalog, capRemaining, reviewMonth, reviewClaimed, onReview 
         ))}
         <div className="earn-row">
           <span>
+            Daily quiz, puzzle or wheel<span className="note"> · random, once a day each</span>
+          </span>
+          <span className="num earn-coins">+10–100</span>
+        </div>
+        <div className="earn-row">
+          <span>
             Challenge completed<span className="note"> · varies</span>
           </span>
-          <span className="num earn-coins">+100–200</span>
+          <span className="num earn-coins">+80–200</span>
         </div>
         <div className="earn-row">
           <span>
@@ -268,7 +276,8 @@ function LedgerCard({ history, breakdown }) {
 }
 
 export default function RewardsPage() {
-  const { rewards, loading, joinChallenge, leaveChallenge, recordReview } = useData();
+  const { rewards, loading, joinChallenge, leaveChallenge, recordReview, playQuiz, playPuzzle, spinWheel } = useData();
+  const [game, setGame] = useState(null);
 
   if (!rewards) {
     return (
@@ -281,7 +290,7 @@ export default function RewardsPage() {
     );
   }
 
-  const { balance, earnedThisMonth, level, nextLevel, streak, health, challenges, catalog } = rewards;
+  const { balance, earnedThisMonth, level, nextLevel, streak, health, challenges, games, catalog } = rewards;
 
   return (
     <section>
@@ -329,6 +338,16 @@ export default function RewardsPage() {
       </div>
 
       <div className="section-head">
+        <div className="card-title">Play &amp; earn</div>
+        <span className="note">Quizzes, puzzles and a wheel — random coins, one try a day.</span>
+      </div>
+      <div className="grid card-grid challenge-grid">
+        {(games || []).map((g) => (
+          <GameCard key={g.key} game={g} onPlay={() => setGame(g.key)} />
+        ))}
+      </div>
+
+      <div className="section-head">
         <div className="card-title">Challenges</div>
         <span className="note">Short commitments, settled once the window closes.</span>
       </div>
@@ -348,6 +367,16 @@ export default function RewardsPage() {
         />
         <LedgerCard history={rewards.history} breakdown={rewards.breakdown} />
       </div>
+
+      {game === 'GAME_QUIZ' && (
+        <QuizModal onClose={() => setGame(null)} onSubmit={playQuiz} />
+      )}
+      {game === 'GAME_PUZZLE' && (
+        <PuzzleModal onClose={() => setGame(null)} onSubmit={playPuzzle} />
+      )}
+      {game === 'GAME_SPIN' && (
+        <SpinModal onClose={() => setGame(null)} onSpin={spinWheel} />
+      )}
     </section>
   );
 }

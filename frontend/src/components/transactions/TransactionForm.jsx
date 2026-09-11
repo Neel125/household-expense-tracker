@@ -4,10 +4,22 @@ import { fmtINR } from '../../lib/format';
 
 const fmtPct = (n) => (Number(n) > 0 ? `${Number(n)}% p.a.` : 'no rate set');
 
-const TYPES = ['Expense', 'Income', 'Investment', 'Loan', 'CC Repayment'];
+const TYPES = [
+  { value: 'Expense', label: 'Expense' },
+  { value: 'Income', label: 'Income' },
+  { value: 'Investment', label: 'Investment' },
+  { value: 'Loan', label: 'Loan EMI' },
+  { value: 'Loan Partial', label: 'Loan partial payment' },
+  { value: 'CC Repayment', label: 'CC Repayment' },
+];
 const PAYMENT_MODES = ['UPI', 'Credit Card', 'Cash', 'Auto Debit', 'Debit Card', 'Net Banking'];
 const NECESSITIES = ['Need', 'Want', 'Investment', 'Debt'];
-const TYPE_TO_NECESSITY = { Investment: 'Investment', Loan: 'Debt', 'CC Repayment': 'Debt' };
+const TYPE_TO_NECESSITY = {
+  Investment: 'Investment',
+  Loan: 'Debt',
+  'Loan Partial': 'Debt',
+  'CC Repayment': 'Debt',
+};
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
 const BLANK = {
@@ -80,9 +92,10 @@ export default function TransactionForm({
   }
 
   const isIncome = form.type === 'Income';
-  const showSettle = form.type === 'CC Repayment' || form.type === 'Loan';
+  const isLoanPartial = form.type === 'Loan Partial';
+  const showSettle = form.type === 'CC Repayment' || form.type === 'Loan' || isLoanPartial;
   const showInvestmentLink = form.type === 'Investment';
-  const showDebtLink = form.type === 'Loan';
+  const showDebtLink = form.type === 'Loan' || isLoanPartial;
 
   const providerOptions = useMemo(
     () => accounts.filter((a) => !a.archived).map((a) => a.name),
@@ -112,6 +125,10 @@ export default function TransactionForm({
     e.preventDefault();
     if (!form.date || !form.name.trim() || !Number(form.amount)) {
       alert('Fill in date, name and amount');
+      return;
+    }
+    if (form.type === 'Loan Partial' && !form.debtId) {
+      alert('Pick the loan this partial payment pays down');
       return;
     }
     setBusy(true);
@@ -228,19 +245,24 @@ export default function TransactionForm({
         )}
         {showDebtLink && (
           <Field
-            label="Pays down loan"
+            label={isLoanPartial ? 'Pays down loan' : 'Pays down loan'}
             hint={
-              selectedDebt
-                ? `${fmtPct(selectedDebt.annualRatePct)} — interest is worked out on the balance and the rest reduces the principal.`
-                : debts.length
-                  ? 'Optional. Linking splits this EMI into interest and principal.'
-                  : 'Add a loan on the Portfolio page first.'
+              isLoanPartial
+                ? selectedDebt
+                  ? `The full ₹ amount reduces principal on “${selectedDebt.name}” (${fmtINR(selectedDebt.outstandingNow)} left).`
+                  : 'Required. The whole payment comes off the selected loan’s principal.'
+                : selectedDebt
+                  ? `${fmtPct(selectedDebt.annualRatePct)} — interest is worked out on the balance and the rest reduces the principal.`
+                  : debts.length
+                    ? 'Optional. Linking splits this EMI into interest and principal.'
+                    : 'Add a loan on the Portfolio page first.'
             }
           >
             <Select
               value={form.debtId}
               onChange={(e) => set('debtId', e.target.value)}
-              placeholder="— not linked —"
+              placeholder={isLoanPartial ? 'Select loan' : '— not linked —'}
+              required={isLoanPartial}
             >
               {openDebts.map((d) => (
                 <option key={d.id} value={d.id}>

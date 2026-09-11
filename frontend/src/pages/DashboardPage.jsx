@@ -485,8 +485,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <EmptyState>
-                    Link a Loan transaction to a debt on the Add Transaction form and each EMI gets
-                    split into interest and principal here.
+                    Link a Loan EMI or Loan partial payment to a debt on the Add Transaction form.
                   </EmptyState>
                 )}
               </div>

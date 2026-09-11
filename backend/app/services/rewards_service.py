@@ -50,6 +50,7 @@ from app.services.events import (
     DomainEvent,
     subscribe,
 )
+from app.services.game_service import GameService, GameStatus
 from app.services.health_service import HealthReport, HealthService
 from app.services.portfolio_service import PortfolioService
 from app.services.reward_rules import Level
@@ -85,6 +86,7 @@ class RewardsSummary:
     breakdown: dict[str, int]
     history: Sequence[CoinTransaction]
     challenges: list[ChallengeState]
+    games: list[GameStatus]
     daily_cap_remaining: int
     review_month: str
     review_claimed: bool
@@ -104,6 +106,7 @@ class RewardsService:
         self.investments = InvestmentRepository(session)
         self.debts = DebtRepository(session)
         self.portfolio = PortfolioService(session)
+        self.games = GameService(session)
 
     # ------------------------------------------------------------- reactions
     def on_expense_tracked(self, event: DomainEvent) -> None:
@@ -586,6 +589,7 @@ class RewardsService:
             breakdown=breakdown,
             history=self.ledger.history(household_id, limit=40),
             challenges=self.challenges.states(household_id),
+            games=self.games.statuses(household_id),
             daily_cap_remaining=max(0, (expense_rule.daily_cap or 0) - earned_today),
             review_month=review_month,
             review_claimed=self.ledger.already_awarded(

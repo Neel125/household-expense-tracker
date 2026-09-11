@@ -23,13 +23,8 @@ from app.repositories.repositories import (
 )
 from app.services import portfolio_math
 from app.services.errors import NotFoundError, ValidationError
+from app.models.transaction import LOAN_PAYMENT_TYPES, TYPE_LOAN_PARTIAL
 from app.services.portfolio_math import DebtView, InvestmentView
-
-# Which transaction type may link to what. The form enforces this too,
-# but the rule lives here so the API can't be talked into an EMI that
-# pays down a mutual fund.
-LINK_TYPE_FOR_INVESTMENT = "Investment"
-LINK_TYPE_FOR_DEBT = "Loan"
 
 
 class PortfolioService:
@@ -44,9 +39,9 @@ class PortfolioService:
         by_investment: dict[int, list[Transaction]] = {}
         by_debt: dict[int, list[Transaction]] = {}
         for txn in self.transactions.portfolio_linked(household_id):
-            if txn.type == LINK_TYPE_FOR_INVESTMENT and txn.investment_id:
+            if txn.type == "Investment" and txn.investment_id:
                 by_investment.setdefault(txn.investment_id, []).append(txn)
-            elif txn.type == LINK_TYPE_FOR_DEBT and txn.debt_id:
+            elif txn.type in LOAN_PAYMENT_TYPES and txn.debt_id:
                 by_debt.setdefault(txn.debt_id, []).append(txn)
         return by_investment, by_debt
 
@@ -109,11 +104,13 @@ class PortfolioService:
         keep_investment: Optional[int] = None
         keep_debt: Optional[int] = None
 
-        if investment_id and txn_type == LINK_TYPE_FOR_INVESTMENT:
+        if investment_id and txn_type == "Investment":
             if not self.investments.get(household_id, investment_id):
                 raise ValidationError("That investment doesn't exist")
             keep_investment = investment_id
-        if debt_id and txn_type == LINK_TYPE_FOR_DEBT:
+        if txn_type == TYPE_LOAN_PARTIAL and not debt_id:
+            raise ValidationError("Pick the loan this partial payment pays down")
+        if debt_id and txn_type in LOAN_PAYMENT_TYPES:
             if not self.debts.get(household_id, debt_id):
                 raise ValidationError("That loan doesn't exist")
             keep_debt = debt_id

@@ -52,6 +52,11 @@ RULES: dict[str, Rule] = {
         # / the size of the score improvement, so `coins` is unused.
         Rule("CHALLENGE_COMPLETED", 0, "Challenge completed"),
         Rule("HEALTH_SCORE_IMPROVED", 0, "Financial health improved"),
+        # Daily playables. The amount is rolled at award time (quiz/puzzle
+        # range, or whichever wheel slice landed), so `coins` is unused.
+        Rule("GAME_QUIZ", 0, "Daily money quiz"),
+        Rule("GAME_PUZZLE", 0, "Daily money puzzle"),
+        Rule("GAME_SPIN", 0, "Spin the wheel"),
         # Debits. Reversal keeps the ledger honest when a rewarded action
         # is undone; redemption is reserved so spending coins later needs
         # no schema change (see README — the MVP has nothing to buy).
@@ -178,6 +183,24 @@ CHALLENGES: list[Challenge] = [
         "month",
         "☕",
         "of the cut",
+    ),
+    Challenge(
+        "log_five_days",
+        "Five-Day Tracker",
+        "Log at least one transaction on five different days this week.",
+        80,
+        "week",
+        "🗓️",
+        "days tracked",
+    ),
+    Challenge(
+        "needs_first",
+        "Needs Over Wants",
+        "Finish the month with more spent on Needs than on Wants.",
+        120,
+        "month",
+        "⚖️",
+        "need vs want",
     ),
 ]
 

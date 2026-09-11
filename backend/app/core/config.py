@@ -12,13 +12,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _normalize_database_url(url: str) -> str:
+    # Render (and some Heroku-style hosts) still emit postgres://.
+    # SQLAlchemy 1.4+ only accepts postgresql://.
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
 class Settings:
     def __init__(self) -> None:
         # SQLite by default so the app runs with zero infra; point
         # DATABASE_URL at Postgres (postgresql://user:pass@host/db) in
-        # docker-compose / production.
-        self.database_url: str = os.environ.get(
-            "DATABASE_URL", "sqlite:///./expense_tracker.db"
+        # docker-compose / production / Render.
+        self.database_url: str = _normalize_database_url(
+            os.environ.get("DATABASE_URL", "sqlite:///./expense_tracker.db")
         )
         self.allowed_origins: str = os.environ.get("ALLOWED_ORIGINS", "*")
 

@@ -14,7 +14,8 @@ Two questions, both answered here and nowhere else:
   the loan down? Reducing-balance amortisation over the linked `Loan`
   transactions in date order: interest accrues on the balance for the
   time since the previous payment, and whatever the payment covers
-  beyond that reduces the principal.
+  beyond that reduces the principal. A `Loan Partial` row is different:
+  the whole amount reduces principal, which is what a prepayment does.
 
 Everything is **derived, never stored**. The alternative — mutating a
 balance on each write — needs a per-transaction record of what was
@@ -29,6 +30,7 @@ from datetime import date
 from typing import Optional, Sequence
 
 from app.models import Debt, Investment, Transaction
+from app.models.transaction import TYPE_LOAN, TYPE_LOAN_PARTIAL
 
 # Average days in a month over a 400-year cycle. Used to turn a gap
 # between two payment dates into "months of interest".
@@ -166,6 +168,8 @@ class Instalment:
     # Months of interest this payment carried, so an early prepayment
     # (which accrues almost none) is explainable in the UI.
     accrued_months: float
+    # emi | prepay — a partial payment skips the interest split.
+    kind: str = "emi"
 
 
 @dataclass(frozen=True)
@@ -204,19 +208,28 @@ def view_debt(
     for txn in by_date(linked):
         paid = max(0.0, float(txn.amount or 0))
         when = _parse(txn.date)
-        # The first linked payment is assumed to be one ordinary period's
-        # worth of interest: the opening balance is "as of now", not as of
-        # the loan's start date, so accruing from start_date would invent
-        # years of interest that has already been paid.
-        months = 1.0 if previous is None else min(
-            MAX_ACCRUAL_MONTHS, _months_between(previous, when)
-        )
-        interest = balance * (rate / 100 / 12) * months if rate > 0 and balance > 0 else 0.0
-        interest = min(interest, paid)
-        # A payment smaller than the interest due pays no principal. Real
-        # loans grow in that case; we hold the balance flat instead of
-        # reporting a debt that goes up when you pay it.
-        principal = min(max(0.0, paid - interest), balance)
+        is_prepay = (txn.type or "") == TYPE_LOAN_PARTIAL
+        if is_prepay:
+            # The whole amount reduces principal. Interest for the days
+            # since the last EMI is left for the next EMI to pick up on
+            # the new (lower) balance.
+            months = 0.0
+            interest = 0.0
+            principal = min(paid, balance)
+        else:
+            # The first linked EMI is assumed to be one ordinary period's
+            # worth of interest: the opening balance is "as of now", not
+            # as of the loan's start date, so accruing from start_date
+            # would invent years of interest that has already been paid.
+            months = 1.0 if previous is None else min(
+                MAX_ACCRUAL_MONTHS, _months_between(previous, when)
+            )
+            interest = balance * (rate / 100 / 12) * months if rate > 0 and balance > 0 else 0.0
+            interest = min(interest, paid)
+            # A payment smaller than the interest due pays no principal.
+            # Real loans grow in that case; we hold the balance flat
+            # instead of reporting a debt that goes up when you pay it.
+            principal = min(max(0.0, paid - interest), balance)
         balance -= principal
         principal_repaid += principal
         interest_paid += interest
@@ -231,10 +244,12 @@ def view_debt(
                 principal=round(principal, 2),
                 balance=round(balance, 2),
                 accrued_months=round(months, 2),
+                kind="prepay" if is_prepay else "emi",
             )
         )
 
-    emis_paid = float(debt.months_paid or 0) + len(instalments)
+    emi_count = sum(1 for t in linked if (t.type or "") == TYPE_LOAN)
+    emis_paid = float(debt.months_paid or 0) + emi_count
     total_borrowed = float(debt.principal or 0)
     # "Closed" has to cover both ways a loan ends: EMIs amortising the
     # balance to zero, and the user editing the outstanding to zero

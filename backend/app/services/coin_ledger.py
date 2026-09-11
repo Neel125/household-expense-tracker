@@ -54,7 +54,10 @@ class CoinLedger:
         return self.coins.totals_by_kind(household_id)
 
     def already_awarded(self, household_id: int, event_key: str) -> bool:
-        return self.coins.find_by_event_key(household_id, event_key) is not None
+        return self.find(household_id, event_key) is not None
+
+    def find(self, household_id: int, event_key: str) -> Optional[CoinTransaction]:
+        return self.coins.find_by_event_key(household_id, event_key)
 
     def earned_today(self, household_id: int, kind: str) -> int:
         """Coins one rule has paid so far today. Days here are UTC days,

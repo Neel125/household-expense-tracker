@@ -17,7 +17,7 @@ from app.services import events
 from app.services.errors import NotFoundError, ValidationError
 from app.services.portfolio_service import PortfolioService
 
-_TYPES = {"Expense", "Investment", "Loan", "CC Repayment", "Income"}
+_TYPES = {"Expense", "Investment", "Loan", "Loan Partial", "CC Repayment", "Income"}
 # Only day-to-day spending is "tracking an expense". A CC repayment or an
 # income line is bookkeeping the app largely derives, so neither earns the
 # logging coin.

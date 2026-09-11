@@ -56,6 +56,12 @@ export const api = {
     recordReview: (month) => http.post('/api/rewards/review', { month }),
     joinChallenge: (key) => http.post(`/api/rewards/challenges/${encodeURIComponent(key)}/join`),
     leaveChallenge: (key) => http.del(`/api/rewards/challenges/${encodeURIComponent(key)}`),
+    quiz: () => http.get('/api/rewards/games/quiz'),
+    submitQuiz: (data) => http.post('/api/rewards/games/quiz', data),
+    puzzle: () => http.get('/api/rewards/games/puzzle'),
+    submitPuzzle: (data) => http.post('/api/rewards/games/puzzle', data),
+    wheel: () => http.get('/api/rewards/games/wheel'),
+    spin: () => http.post('/api/rewards/games/spin'),
   },
   goals: {
     list: () => http.get('/api/goals'),

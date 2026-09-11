@@ -150,6 +150,19 @@ export function DataProvider({ children }) {
       leaveChallenge: (key) => run(() => api.rewards.leaveChallenge(key), 'Left the challenge'),
       recordReview: (month) => run(() => api.rewards.recordReview(month), 'Review logged — coins added'),
 
+      playQuiz: (answers) => api.rewards.submitQuiz({ answers }).then(async (r) => {
+        await refresh();
+        return r;
+      }),
+      playPuzzle: (payload) => api.rewards.submitPuzzle(payload).then(async (r) => {
+        await refresh();
+        return r;
+      }),
+      spinWheel: () => api.rewards.spin().then(async (r) => {
+        await refresh();
+        return r;
+      }),
+
       // goals
       addGoal: (payload) => run(() => api.goals.create(payload), `${payload.name} created`),
       updateGoal: (id, payload) => run(() => api.goals.update(id, payload), 'Goal updated'),
@@ -167,7 +180,7 @@ export function DataProvider({ children }) {
       updateDebt: (id, payload) => run(() => api.debts.update(id, payload), 'Debt updated'),
       removeDebt: (id) => run(() => api.debts.remove(id), 'Debt removed'),
     }),
-    [run]
+    [run, refresh]
   );
 
   const value = { ...data, loading, scope, setScope, profile, refresh, ...actions };

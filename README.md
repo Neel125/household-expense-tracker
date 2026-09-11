@@ -265,6 +265,52 @@ and `DELETE /api/rewards/challenges/{key}`.
   Subscriptions-category merchant billed for three straight months and
   then absent counts as cancelled. Nobody has to remember to tell the app.
 
+## The design system
+
+Both this app and the marketing site in `../expense-tracker-website` run
+on one visual language, **Deep Teal** — a teal → mint → lime palette on a
+near-black teal ground, with soft ambient colour fields behind the
+content.
+
+Everything hangs off the token block at the top of
+`frontend/src/styles.css`. Components reference tokens and never a raw
+hex, so re-theming the entire product — both colour schemes, every page,
+every chart — is an edit to that one block.
+
+```
+--accent      #0D9488 light · #2DD4BF dark    the interactive colour
+--accent-2/-3 mint, lime                      gradient + glow partners only
+--grad-brand  teal → mint → lime              primary buttons, meters, the mark
+--ambient     three radial fields             the light in the room
+--series-1…6  teal amber lime sky violet rose categorical charts
+--radius-sm/-/-lg/-xl, --shadow, --shadow-lg, --glow, --ring, --ease
+```
+
+A few rules the system follows:
+
+- **The brand gradient means "action".** It appears on the primary
+  button, the app mark, progress meters and the active nav tick, and
+  nowhere else — so it always reads as the thing to do or the thing
+  moving forward.
+- **Surfaces are translucent, not opaque.** The nav rail and modals blur
+  what is behind them and cards carry a faint brand wash, which is what
+  lets the ambient field show through instead of being punched out.
+- **Colour carries meaning, text stays legible.** Insight tiles and pills
+  put the verdict in a border or a wash and leave the text at full
+  contrast, rather than colour-coding sentences into unreadability.
+- **Type**: Plus Jakarta Sans throughout, JetBrains Mono for every
+  figure. Currency is tabular and never wraps.
+- **Motion** is 160–350ms on `--ease`, and the whole system collapses to
+  near-zero under `prefers-reduced-motion`.
+
+Icons are a small inline-SVG set in `components/ui/Icon.jsx` — about a
+dozen 24×24 stroke paths, which costs less than the bundle and licence
+care an icon package needs. Add one by adding a path to its map.
+
+Light mode is a full peer, not an afterthought: the same tokens with a
+mint-tinted ground, and the dark values declared twice so an explicit
+`data-theme` wins in both directions.
+
 ## The dashboard
 
 Laid out as a story rather than a wall of charts — each section answers
@@ -467,6 +513,35 @@ Now `http://<your-server>:8000` serves the whole app — API and UI — from
 one process. Put this behind a reverse proxy (Caddy, nginx) for TLS, or
 run it on a platform like Railway/Render/Fly.io/a VPS with a process
 manager (systemd, pm2, or `gunicorn -k uvicorn.workers.UvicornWorker`).
+
+### Render (Docker + managed Postgres)
+
+`render.yaml` at the repo root is a Blueprint: one web service built from
+the existing `Dockerfile` (UI + API) and a Postgres 16 database. The app
+reads `DATABASE_URL` and `JWT_SECRET` from the environment; `SEED_DATA`
+is off so demo rows are not loaded over your household.
+
+1. Commit and push this repo to GitHub (Render deploys from git).
+2. [Render Dashboard](https://dashboard.render.com) → **New** →
+   **Blueprint**. Connect the repo and apply `render.yaml`.
+3. Wait until `ledger-and-card` is Live. Open
+   `https://ledger-and-card.onrender.com` (the exact URL is on the
+   service page) — the database is empty until you restore.
+4. Copy your local Docker Compose data onto Render Postgres:
+
+```bash
+./scripts/dump-local-db.sh
+RENDER_DATABASE_URL='postgresql://USER:PASS@HOST/ledger?sslmode=require' \
+  ./scripts/restore-to-render.sh
+```
+
+The External connection string is on **ledger-db → Info**. After the
+restore, **Manual Deploy → Restart** the web service so it picks up the
+data. Do **not** run `docker compose down -v` locally — that deletes
+`ledger-pg`.
+
+Web and database must stay in the **same region** (the Blueprint uses
+`singapore`) so the injected `DATABASE_URL` is the private network URL.
 
 **Split option** — deploy `frontend/dist` to a static host (Vercel,
 Netlify, Cloudflare Pages) and the backend anywhere that runs Python

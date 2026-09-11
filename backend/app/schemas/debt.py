@@ -35,6 +35,7 @@ class InstalmentOut(CamelModel):
     principal: float
     balance: float
     accrued_months: float
+    kind: str = "emi"
 
 
 class DebtOut(CamelModel):

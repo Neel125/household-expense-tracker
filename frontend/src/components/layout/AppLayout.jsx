@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { Avatar } from '../ui';
+import { Avatar, Icon } from '../ui';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
@@ -32,7 +32,7 @@ export default function AppLayout() {
     <div className="app">
       <header className="topbar">
         <button className="icon-btn" onClick={() => setNavOpen(true)} aria-label="Open menu">
-          ☰
+          <Icon name="menu" size={20} />
         </button>
         <div className="topbar-title">{TITLES[pathname] || 'Ledger & Card'}</div>
         <button

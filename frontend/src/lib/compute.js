@@ -7,6 +7,10 @@ import { sum, monthKey } from './format';
 // buckets to avoid double-counting. Income is likewise excluded from
 // spend — it feeds the income-vs-expense and savings-rate views instead.
 
+function isLoanOutflow(t) {
+  return t.type === 'Loan' || t.type === 'Loan Partial';
+}
+
 export function inScope(list, scope, profile) {
   return scope === 'mine' && profile ? list.filter((t) => t.member === profile) : list;
 }
@@ -47,7 +51,7 @@ function aggregate(list) {
 
   const income = sum(list.filter((t) => t.type === 'Income'));
   const investments = sum(list.filter((t) => t.type === 'Investment'));
-  const loanPaid = sum(list.filter((t) => t.type === 'Loan'));
+  const loanPaid = sum(list.filter(isLoanOutflow));
   // Consumption = day-to-day spend + loan outflow; investments are savings,
   // not consumption, so they're left out of the savings-rate denominator.
   const consumption = sum(list.filter((t) => t.type === 'Expense')) + loanPaid;
@@ -130,9 +134,9 @@ export function computeCard(transactions, scope, profile, selectedMonth, cardNam
 
 export function computeLoan(transactions, scope, profile, selectedMonth, loanName) {
   const list = inScope(transactions, scope, profile);
-  const paidAll = sum(list.filter((t) => t.type === 'Loan' && t.account === loanName));
+  const paidAll = sum(list.filter((t) => isLoanOutflow(t) && t.account === loanName));
   const paidMonth = sum(
-    list.filter((t) => monthKey(t.date) === selectedMonth && t.type === 'Loan' && t.account === loanName)
+    list.filter((t) => monthKey(t.date) === selectedMonth && isLoanOutflow(t) && t.account === loanName)
   );
   return { paidAll, paidMonth };
 }
@@ -153,7 +157,7 @@ export function computeAccountBalance(transactions, account) {
     return { balance: -outstanding, outstanding, spend, repaid, kind: 'credit_card' };
   }
   if (account.type === 'loan') {
-    const paid = sum(transactions.filter((t) => t.type === 'Loan' && t.account === account.name));
+    const paid = sum(transactions.filter((t) => isLoanOutflow(t) && t.account === account.name));
     return { balance: 0, paid, kind: 'loan' };
   }
   const credits = sum(transactions.filter((t) => t.type === 'Income' && t.providerType === account.name));

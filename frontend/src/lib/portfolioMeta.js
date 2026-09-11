@@ -14,16 +14,19 @@ export const INVESTMENT_KINDS = [
   { value: 'other', label: 'Other', icon: '📦' },
 ];
 export const INV_META = Object.fromEntries(INVESTMENT_KINDS.map((k) => [k.value, k]));
+// Nine kinds against a six-colour ramp, so three take fixed mid-tones
+// that read the same in both themes. Ordered to keep neighbouring slices
+// of a donut apart rather than to match the list order.
 export const INV_COLORS = {
-  fd: 'var(--series-1)',
-  rd: '#0ea5e9',
-  sip: 'var(--series-3)',
-  mutual_fund: '#22c55e',
-  stock: 'var(--series-2)',
-  bond: '#8b5cf6',
-  gold: 'var(--series-4)',
-  ppf_epf: '#14b8a6',
-  other: '#94a3b8',
+  fd: 'var(--series-4)', /* sky */
+  rd: 'var(--series-1)', /* teal */
+  sip: 'var(--series-3)', /* lime */
+  mutual_fund: 'var(--series-5)', /* violet */
+  stock: 'var(--series-6)', /* rose */
+  gold: 'var(--series-2)', /* amber */
+  bond: '#64748B', /* slate */
+  ppf_epf: '#6366F1', /* indigo */
+  other: '#94A3B8', /* grey */
 };
 
 export const DEBT_KINDS = [
