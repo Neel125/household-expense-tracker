@@ -36,7 +36,6 @@ databases:
     postgresMajorVersion: "16"
     databaseName: ledger
     user: ledger
-    diskSizeGB: 1
     # Open so you can restore the local Docker dump from your laptop.
     # After the restore, tighten this in the Render dashboard if you want.
     ipAllowList:
