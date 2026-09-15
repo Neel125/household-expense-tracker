@@ -1,19 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
   Avatar,
   Button,
   Card,
   Field,
+  Modal,
   PageHeader,
   Pill,
   Select,
 } from '../components/ui';
+import ReferCard from '../components/rewards/ReferCard';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 
 const RELATIONS = ['Self', 'Spouse', 'Parent', 'Child', 'Sibling', 'Other'];
+
+const inviteLink = (token) => `${window.location.origin}/invite/${token}`;
 const AVATAR_MAX_MB = 1;
 
 // Read a File as a data URL — the whole point of doing avatars this way is
@@ -147,50 +151,94 @@ function ProfileForm() {
   );
 }
 
-function InvitePanel() {
+// Creating an invite is a one-off act, so it belongs in a dialog rather
+// than a form sitting open on the page. The freshly minted link is shown
+// *inside* the dialog: the whole point of the interaction is to walk away
+// holding a link, and a clipboard write can silently fail (insecure
+// origin, denied permission) — so the link is always on screen to copy by
+// hand as well.
+function InviteDialog({ onClose, onCreated }) {
   const toast = useToast();
-  const [invites, setInvites] = useState([]);
-  const [relation, setRelation] = useState('');
   const [email, setEmail] = useState('');
+  const [relation, setRelation] = useState('');
   const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const load = () => api.auth.listInvites().then(setInvites).catch(() => {});
-  useEffect(() => {
-    load();
-  }, []);
-
-  const linkFor = (token) => `${window.location.origin}/invite/${token}`;
-  const pending = invites.filter((i) => !i.acceptedAt);
-
-  async function create() {
+  async function create(e) {
+    e.preventDefault();
     setBusy(true);
     try {
       const invite = await api.auth.createInvite({ email, relation });
-      setEmail('');
-      setRelation('');
-      await load();
-      await navigator.clipboard?.writeText(linkFor(invite.token)).catch(() => {});
-      toast('Invite link created & copied');
-    } catch (e) {
-      toast(e.message);
+      const url = inviteLink(invite.token);
+      setLink(url);
+      onCreated?.();
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+      } catch {
+        setCopied(false);
+      }
+    } catch (err) {
+      toast(err.message);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Invite a family member" hint="they get their own login, same books">
-      <div className="card-pad">
-        <div className="form-grid">
-          <Field label="Email (optional)">
+    <Modal title="Invite a family member" onClose={onClose}>
+      <p className="note">
+        They get their own login and see the same household books. The link works once, for
+        whoever opens it — share it with the person you mean.
+      </p>
+
+      {link ? (
+        <>
+          <div className="invite-row" style={{ marginTop: 4 }}>
+            <input readOnly value={link} onFocus={(e) => e.target.select()} />
+            <Button
+              size="sm"
+              onClick={() => {
+                navigator.clipboard?.writeText(link);
+                setCopied(true);
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          </div>
+          <div className="note" style={{ marginTop: 8 }}>
+            {copied ? 'Copied to your clipboard.' : 'Select the link above to copy it.'}
+          </div>
+          <div className="form-actions">
+            <Button variant="primary" onClick={onClose}>
+              Done
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setLink('');
+                setCopied(false);
+                setEmail('');
+                setRelation('');
+              }}
+            >
+              Create another
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={create}>
+          <Field label="Email" hint="Optional — just a reminder of who the link is for.">
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="them@example.com"
+              autoFocus
             />
           </Field>
-          <Field label="Suggested relation">
+          <Field label="Suggested relation" hint="They can change it when they join.">
             <Select
               value={relation}
               onChange={(e) => setRelation(e.target.value)}
@@ -198,47 +246,55 @@ function InvitePanel() {
               options={RELATIONS}
             />
           </Field>
-        </div>
-        <div className="form-actions">
-          <Button variant="primary" size="sm" onClick={create} disabled={busy}>
-            Create invite link
-          </Button>
-        </div>
-
-        {pending.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div className="section-label">Pending invites</div>
-            {pending.map((i) => (
-              <div key={i.id} className="invite-row">
-                <input readOnly value={linkFor(i.token)} onFocus={(e) => e.target.select()} />
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(linkFor(i.token));
-                    toast('Copied');
-                  }}
-                >
-                  Copy
-                </Button>
-              </div>
-            ))}
+          <div className="form-actions">
+            <Button type="submit" variant="primary" disabled={busy}>
+              {busy ? 'Creating…' : 'Create invite link'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
           </div>
-        )}
-
-        <div className="note" style={{ marginTop: 10 }}>
-          Share the link with a family member. Anyone who opens it can create a
-          login that joins this household.
-        </div>
-      </div>
-    </Card>
+        </form>
+      )}
+    </Modal>
   );
 }
 
-function FamilyList() {
+// The household section: who is in it, who has been invited but hasn't
+// joined yet, and the button that adds to either list. Pending invites
+// live here rather than in the dialog because they are part of the
+// picture of the household, not part of the act of creating one.
+function FamilySection({ isOwner }) {
   const { members, profile } = useData();
+  const toast = useToast();
+  const [invites, setInvites] = useState([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const load = useCallback(() => {
+    if (!isOwner) return;
+    api.auth.listInvites().then(setInvites).catch(() => {});
+  }, [isOwner]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const pending = invites.filter((i) => !i.acceptedAt);
+
   return (
-    <Card title="Family members" hint={`${members.length} member${members.length === 1 ? '' : 's'}`}>
-      <div className="card-pad">
+    <>
+      <Card
+        title="Family members"
+        hint={`${members.length} member${members.length === 1 ? '' : 's'}`}
+        actions={
+          isOwner ? (
+            <Button size="sm" variant="primary" onClick={() => setDialogOpen(true)}>
+              + Invite member
+            </Button>
+          ) : null
+        }
+        pad
+      >
         {members.length === 0 ? (
           <div className="empty">No members yet.</div>
         ) : (
@@ -261,13 +317,55 @@ function FamilyList() {
             ))}
           </ul>
         )}
-      </div>
-    </Card>
+
+        {isOwner && pending.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div className="section-label">
+              Invited · {pending.length} link{pending.length === 1 ? '' : 's'} not used yet
+            </div>
+            {pending.map((i) => (
+              <div key={i.id} className="invite-row">
+                <input
+                  readOnly
+                  value={inviteLink(i.token)}
+                  onFocus={(e) => e.target.select()}
+                  aria-label={i.email ? `Invite link for ${i.email}` : 'Invite link'}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(inviteLink(i.token));
+                    toast('Copied');
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isOwner && (
+          <div className="note" style={{ marginTop: 12 }}>
+            Anyone who opens an invite link can create a login that joins this household and sees
+            the same books.
+          </div>
+        )}
+      </Card>
+
+      {dialogOpen && (
+        <InviteDialog onClose={() => setDialogOpen(false)} onCreated={load} />
+      )}
+    </>
   );
 }
 
+// Two sections: you, and your household. The refer card sits beside the
+// profile form because both are about your own account — and a share
+// code is something you reach for while already looking at it.
 export default function ProfilePage() {
   const { user, household, isOwner } = useAuth();
+  const { referrals } = useData();
 
   return (
     <section>
@@ -280,11 +378,14 @@ export default function ProfilePage() {
 
       <div className="grid two-col">
         <ProfileForm />
-        <div className="stacked">
-          <FamilyList />
-          {isOwner && <InvitePanel />}
-        </div>
+        <ReferCard referrals={referrals} />
       </div>
+
+      <div className="section-head">
+        <div className="card-title">Your household</div>
+        <span className="note">Everyone here shares the same books.</span>
+      </div>
+      <FamilySection isOwner={isOwner} />
     </section>
   );
 }

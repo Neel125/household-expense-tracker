@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { GameCard, PuzzleModal, QuizModal, SpinModal } from '../components/games/GamesPanel';
 import { Button, Card, EmptyState, PageHeader, Pill, ProgressBar, SegmentedControl } from '../components/ui';
 import { useData } from '../context/DataContext';
@@ -204,100 +205,16 @@ function EarnPanel({ catalog, capRemaining, reviewMonth, reviewClaimed, onReview
             {capRemaining > 0
               ? `${capRemaining} logging coin(s) left today.`
               : 'Daily logging cap is used up.'}
+            {' '}
+            {/* The catalogue above lists the referral rewards, so it has to
+                say where to act on them — the share code lives on Profile. */}
+            Referral coins start from <Link to="/profile">your profile</Link>.
           </div>
         </div>
         <Button size="sm" variant={reviewClaimed ? 'ghost' : 'primary'} disabled={reviewClaimed} onClick={() => onReview(reviewMonth)}>
           {reviewClaimed ? 'Logged' : 'Mark reviewed +25'}
         </Button>
       </div>
-    </Card>
-  );
-}
-
-function ReferCard({ referrals }) {
-  const [copied, setCopied] = useState('');
-
-  if (!referrals) {
-    return (
-      <Card title="Refer a friend" pad>
-        <EmptyState>Referrals are unavailable right now.</EmptyState>
-      </Card>
-    );
-  }
-
-  const link = `${window.location.origin}${referrals.sharePath}?ref=${referrals.code}`;
-
-  async function copy(what, value) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(what);
-      setTimeout(() => setCopied(''), 1800);
-    } catch {
-      setCopied('');
-    }
-  }
-
-  return (
-    <Card
-      title="Refer a friend"
-      hint={`+${fmtCoins(referrals.rewardCoins)} each`}
-      actions={referrals.qualifiedCount > 0 ? <Pill tone="good">{referrals.qualifiedCount} joined</Pill> : null}
-      pad
-    >
-      <p className="note" style={{ margin: '0 0 12px' }}>
-        They must log {referrals.neededExpenses} expenses on {referrals.neededDays} days.
-        Sign-up itself pays nothing. Cap {referrals.monthlyCap}/month.
-      </p>
-      <div className="refer-code">
-        <span className="num">{referrals.code}</span>
-        <Button size="sm" variant="ghost" onClick={() => copy('code', referrals.code)}>
-          {copied === 'code' ? 'Copied' : 'Copy code'}
-        </Button>
-        <Button size="sm" variant="primary" onClick={() => copy('link', link)}>
-          {copied === 'link' ? 'Link copied' : 'Copy link'}
-        </Button>
-      </div>
-      <div className="mini-stats mini-stats-3" style={{ marginTop: 14, marginBottom: 0 }}>
-        <div>
-          <div className="note">Joined</div>
-          <div className="num mom-val">{referrals.qualifiedCount}</div>
-        </div>
-        <div>
-          <div className="note">Settling in</div>
-          <div className="num mom-val">{referrals.pendingCount}</div>
-        </div>
-        <div>
-          <div className="note">Earned</div>
-          <div className="num mom-val up-good">{fmtCoins(referrals.coinsEarned)}</div>
-        </div>
-      </div>
-      {referrals.referrals.length > 0 && (
-        <div className="rank-list" style={{ marginTop: 14 }}>
-          {referrals.referrals.map((r) => (
-            <div key={r.id} className="refer-row">
-              <div className="refer-row-head">
-                <span>{r.name}</span>
-                {r.status === 'qualified' ? (
-                  <Pill tone="good">+{fmtCoins(referrals.rewardCoins)}</Pill>
-                ) : (
-                  <span className="note">
-                    {r.expenses}/{r.neededExpenses} · {r.activeDays}/{r.neededDays}d
-                  </span>
-                )}
-              </div>
-              <ProgressBar pct={r.pct} over={false} />
-            </div>
-          ))}
-        </div>
-      )}
-      {referrals.joinedThrough && (
-        <div className="takeaway">
-          You joined through <strong>{referrals.joinedThrough.referrerName}</strong>.
-          {referrals.joinedThrough.status === 'qualified'
-            ? ` Welcome bonus of ${fmtCoins(referrals.joinedThrough.welcomeCoins)} is in the ledger.`
-            : ` ${referrals.joinedThrough.expenses}/${referrals.joinedThrough.neededExpenses} expenses so far.`}
-        </div>
-      )}
     </Card>
   );
 }
@@ -355,7 +272,7 @@ function LedgerCard({ history, breakdown }) {
 }
 
 export default function RewardsPage() {
-  const { rewards, referrals, loading, joinChallenge, leaveChallenge, recordReview, playQuiz, playPuzzle, spinWheel } =
+  const { rewards, loading, joinChallenge, leaveChallenge, recordReview, playQuiz, playPuzzle, spinWheel } =
     useData();
   const [game, setGame] = useState(null);
   const [tab, setTab] = useState('play');
@@ -422,12 +339,7 @@ export default function RewardsPage() {
         </div>
       )}
 
-      {tab === 'ledger' && (
-        <div className="grid two-col-even">
-          <LedgerCard history={rewards.history} breakdown={rewards.breakdown} />
-          <ReferCard referrals={referrals} />
-        </div>
-      )}
+      {tab === 'ledger' && <LedgerCard history={rewards.history} breakdown={rewards.breakdown} />}
 
       {game === 'GAME_QUIZ' && (
         <QuizModal onClose={() => setGame(null)} onSubmit={playQuiz} />

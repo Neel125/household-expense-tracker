@@ -297,6 +297,13 @@ self-referring code attaches nothing and the sign-up proceeds. The
 sign-up copy is generated from the thresholds rather than repeating them,
 so changing `REFERRAL_MIN_*` updates both screens.
 
+**Where it lives.** The share card is on the **Profile** page rather than
+Rewards, beside the profile form: both are about your own account, and a
+share code is something you reach for while already looking at it. The
+reward catalogue on Rewards still lists the referral payouts, so it links
+across to Profile rather than advertising a reward with no way to act on
+it.
+
 The API is `GET /api/referrals` (your code, who you have brought in, and
 how far along each of them is) and the public
 `GET /api/referrals/preview/{code}`, which returns a household name and
@@ -604,6 +611,26 @@ SQLite file — back it up like any file. For real/multi-user use, point
 SQLModel/SQLAlchemy uses `postgresql://user:pass@host/db` with no code
 changes; `psycopg2-binary` is already in `requirements.txt`. The Docker
 compose file provisions Postgres for you.
+
+## The Profile page
+
+Two sections, matching the two things the page is about:
+
+1. **You** — the profile form (name, photo, contact) beside
+   [Refer a friend](#refer-a-friend).
+2. **Your household** — the member list, an **Invite member** button, and
+   any invite links that haven't been used yet.
+
+Creating an invite is a one-off act, so it opens in a dialog rather than
+sitting on the page as an always-open form. The freshly minted link is
+shown *inside* that dialog, with a Copy button: the point of the
+interaction is to walk away holding a link, and a clipboard write can
+fail silently (insecure origin, denied permission) — so the link is
+always on screen to select by hand as well. Pending invites then live in
+the household card rather than the dialog, because they are part of the
+picture of the household, not part of the act of creating one.
+
+Everything in the household section except the member list is owner-only.
 
 ## Authentication & invites
 
