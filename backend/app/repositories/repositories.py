@@ -19,6 +19,7 @@ from app.models import (
     Investment,
     Invite,
     Member,
+    Referral,
     Transaction,
     User,
 )
@@ -183,6 +184,14 @@ class CoinTransactionRepository(HouseholdRepository[CoinTransaction]):
         )
         return int(self.session.exec(stmt).one() or 0)
 
+    def count_for_kind_since(self, household_id: int, kind: str, since_iso: str) -> int:
+        stmt = select(func.count(CoinTransaction.id)).where(
+            CoinTransaction.household_id == household_id,
+            CoinTransaction.kind == kind,
+            CoinTransaction.created_at >= since_iso,
+        )
+        return int(self.session.exec(stmt).one() or 0)
+
     def totals_by_kind(self, household_id: int) -> dict[str, int]:
         stmt = (
             select(CoinTransaction.kind, func.coalesce(func.sum(CoinTransaction.amount), 0))
@@ -216,6 +225,38 @@ class HealthSnapshotRepository(HouseholdRepository[HealthSnapshot]):
         return self.session.exec(stmt).first()
 
 
+class ReferralRepository:
+    """A referral row links two households, so the generic
+    household-scoped base doesn't fit: every query has to say which side
+    of the relationship it means."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def add(self, obj: Referral) -> Referral:
+        self.session.add(obj)
+        self.session.commit()
+        self.session.refresh(obj)
+        return obj
+
+    def save(self, obj: Referral) -> Referral:
+        return self.add(obj)
+
+    def made_by(self, household_id: int) -> Sequence[Referral]:
+        """Referrals this household sent out, newest first."""
+        stmt = (
+            select(Referral)
+            .where(Referral.referrer_household_id == household_id)
+            .order_by(Referral.id.desc())
+        )
+        return self.session.exec(stmt).all()
+
+    def for_referred(self, household_id: int) -> Optional[Referral]:
+        """The referral that brought this household in, if any."""
+        stmt = select(Referral).where(Referral.referred_household_id == household_id)
+        return self.session.exec(stmt).first()
+
+
 class HouseholdRepo:
     """Households aren't scoped by household_id (they *are* the scope), so
     this one doesn't extend HouseholdRepository."""
@@ -225,6 +266,13 @@ class HouseholdRepo:
 
     def get(self, household_id: int) -> Optional[Household]:
         return self.session.get(Household, household_id)
+
+    def find_by_referral_code(self, code: str) -> Optional[Household]:
+        key = (code or "").strip().upper()
+        if not key:
+            return None
+        stmt = select(Household).where(Household.referral_code == key)
+        return self.session.exec(stmt).first()
 
     def add(self, obj: Household) -> Household:
         self.session.add(obj)

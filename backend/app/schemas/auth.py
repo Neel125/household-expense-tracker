@@ -10,6 +10,9 @@ class RegisterIn(CamelModel):
     password: str
     display_name: str
     household_name: str = ""
+    # Optional "refer a friend" code. Unknown codes are ignored rather
+    # than rejected — a bad code must never cost someone their signup.
+    referral_code: str = ""
 
 
 class LoginIn(CamelModel):

@@ -13,7 +13,7 @@ fi
 
 echo "Dumping local ledger database → ${OUT}"
 docker compose exec -T db pg_dump -U ledger -d ledger \
-  --no-owner --no-acl --clean --if-exists > "$OUT"
+  --no-owner --no-acl > "$OUT"
 
 echo "Done. $(wc -c < "$OUT") bytes."
 echo "Restore on Render with: RENDER_DATABASE_URL='…' ./scripts/restore-to-render.sh ${OUT}"

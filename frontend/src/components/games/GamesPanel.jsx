@@ -309,16 +309,16 @@ export function SpinModal({ onClose, onSpin }) {
 export function GameCard({ game, onPlay }) {
   const { title, description, icon, payoutMin, payoutMax, hint, played, passed, coinsAwarded } = game;
   return (
-    <div className={'card card-pad challenge-card' + (passed ? ' won' : '')}>
+    <div className={'card card-pad play-tile' + (passed ? ' won' : '')}>
       <div className="challenge-head">
         <div className="challenge-icon" aria-hidden="true">{icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="challenge-copy">
           <div className="challenge-title">{title}</div>
           <div className="note">{hint}</div>
         </div>
         <span className="coin-badge">🪙 {fmtCoins(payoutMin)}–{fmtCoins(payoutMax)}</span>
       </div>
-      <div className="note" style={{ marginTop: 10 }}>{description}</div>
+      <p className="challenge-desc">{description}</p>
       <div className="challenge-actions">
         <Button size="sm" variant={played ? 'ghost' : 'primary'} onClick={onPlay}>
           {played ? (passed ? `Won ${fmtCoins(coinsAwarded)} today` : 'See result') : 'Play'}

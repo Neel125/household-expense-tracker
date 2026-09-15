@@ -48,6 +48,13 @@ export const api = {
     update: (id, data) => http.put(`/api/income-sources/${id}`, data),
     remove: (id) => http.del(`/api/income-sources/${id}`),
   },
+  referrals: {
+    // The household's code, who it has brought in, and how close each of
+    // them is to earning both sides a payout.
+    summary: () => http.get('/api/referrals'),
+    // Public: lets the sign-up screen name who invited you.
+    preview: (code) => http.get(`/api/referrals/preview/${encodeURIComponent(code)}`),
+  },
   rewards: {
     // One GET backs the whole Rewards page; reading it also settles
     // anything earned since the last look (see RewardsService.settle).

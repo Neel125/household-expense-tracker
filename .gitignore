@@ -11,4 +11,7 @@ frontend/dist/
 
 # Env
 .env
+.env.render
 frontend/.env
+ledger-local.dump.sql
+*.dump.sql

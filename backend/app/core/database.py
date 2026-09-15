@@ -39,6 +39,11 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "investment_id": "INTEGER",
         "debt_id": "INTEGER",
     },
+    # Referral code. Blank means "not generated yet", which is the state
+    # every existing household starts in.
+    "household": {
+        "referral_code": "TEXT NOT NULL DEFAULT ''",
+    },
 }
 
 

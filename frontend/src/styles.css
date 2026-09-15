@@ -1010,16 +1010,95 @@ svg text{ font-family:var(--font-sans); }
    so a grid of challenges doesn't stagger. */
 .section-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:22px 0 12px; }
 .challenge-grid{ align-items:stretch; }
-.challenge-card{ display:flex; flex-direction:column; }
+.challenge-card, .play-tile{ display:flex; flex-direction:column; }
+.play-tile.won, .challenge-card.won{ border-color:color-mix(in oklab, var(--status-good) 45%, var(--border)); }
 .challenge-actions{ margin-top:auto; padding-top:12px; }
-.challenge-card.won{ border-color:color-mix(in oklab, var(--status-good) 45%, var(--border)); }
 .challenge-head{ display:flex; align-items:center; gap:10px; }
 .challenge-icon{
   width:36px; height:36px; border-radius:10px; background:var(--surface-2);
   display:flex; align-items:center; justify-content:center; font-size:17px; flex:0 0 auto;
 }
+.challenge-copy{ flex:1; min-width:0; }
 .challenge-title{ font-weight:600; font-size:14px; }
+.challenge-desc{
+  margin:10px 0 12px; font-size:13px; color:var(--text-secondary); line-height:1.45;
+}
 .challenge-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; }
+
+/* Rewards page: one hero, then a tab so games / challenges / health /
+   ledger are not competing in a single scroll. */
+.rewards-hero{
+  display:grid; grid-template-columns:minmax(0,1.4fr) minmax(220px, .8fr);
+  gap:0; margin-bottom:16px;
+  background:var(--surface); background-image:var(--grad-surface);
+  border:1px solid var(--border); border-radius:var(--radius-xl); box-shadow:var(--shadow);
+  overflow:hidden; position:relative;
+}
+.rewards-hero::before{
+  content:""; position:absolute; inset:0 auto auto; height:3px; width:100%;
+  background:var(--grad-brand);
+}
+.rewards-hero-main{ padding:clamp(18px,2.4vw,26px) clamp(16px,2vw,24px); min-width:0; }
+.rewards-kicker{
+  font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--text-muted); margin-bottom:4px;
+}
+.rewards-balance{
+  font-size:clamp(32px, 4.2vw, 44px); font-weight:700; letter-spacing:-0.04em; line-height:1.1;
+}
+.rewards-level{ display:flex; align-items:center; gap:12px; margin-top:16px; max-width:420px; }
+.rewards-level-copy{ flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.rewards-level-copy .meter{ margin-top:2px; }
+.rewards-hero-aside{
+  display:flex; flex-direction:column; justify-content:center; gap:18px;
+  padding:clamp(18px,2.4vw,26px) clamp(16px,2vw,22px);
+  border-left:1px solid var(--border); background:color-mix(in oklab, var(--surface-2) 55%, transparent);
+}
+.rewards-aside-stat{ display:flex; align-items:center; gap:12px; }
+.rewards-aside-stat .label{
+  font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em;
+}
+.aside-val{ font-family:var(--font-mono); font-size:18px; font-weight:600; letter-spacing:-0.02em; }
+.streak-mark{
+  width:72px; height:72px; border-radius:50%; flex:0 0 auto;
+  display:grid; place-items:center; font-size:28px;
+  background:var(--surface); border:1px solid var(--border);
+}
+.score-ring{ width:72px; height:72px; flex:0 0 auto; }
+.score-ring-track{ stroke:var(--surface-2); }
+.score-ring-fill{ stroke:var(--status-warning); }
+.score-ring.tone-good .score-ring-fill{ stroke:var(--status-good); }
+.score-ring.tone-debt .score-ring-fill{ stroke:var(--status-critical); }
+.score-ring text{
+  font-family:var(--font-mono); font-size:16px; font-weight:700; fill:var(--text-primary);
+}
+.rewards-tabs{ margin: 4px 0 16px; }
+.rewards-tabs .segmented{ display:flex; width:100%; max-width:520px; }
+.rewards-tabs .segmented button{ flex:1; }
+.earn-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:8px; }
+.earn-chip{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  padding:10px 12px; border-radius:var(--radius-sm); background:var(--surface-2);
+  border:1px solid var(--border); font-size:13px;
+}
+.review-title{ font-weight:600; font-size:13.5px; }
+.ledger-breakdown{
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;
+}
+.ledger-pill{
+  display:flex; align-items:baseline; gap:8px;
+  padding:6px 10px; border-radius:100px; background:var(--surface-2); border:1px solid var(--border);
+  font-size:12.5px;
+}
+.rewards-ledger-table{ max-height:min(420px, 60vh); overflow:auto; }
+@media (max-width:760px){
+  .rewards-hero{ grid-template-columns:1fr; }
+  .rewards-hero-aside{
+    border-left:none; border-top:1px solid var(--border);
+    flex-direction:row; flex-wrap:wrap; gap:16px 24px;
+  }
+  .rewards-tabs .segmented{ max-width:none; }
+}
 
 .quiz-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px; }
 .quiz-prompt{ font-size:14px; font-weight:600; margin-bottom:8px; }
@@ -1137,3 +1216,27 @@ svg text{ font-family:var(--font-sans); }
   display:flex; align-items:baseline; justify-content:space-between; gap:10px;
   font-size:13.5px; font-weight:600;
 }
+
+/* ============================== REFERRALS ============================== */
+/* The share code reads as something to copy: monospace, boxed, with the
+   two copy actions sitting right beside it. */
+.refer-code{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:10px 12px; border:1px dashed var(--border-strong); border-radius:var(--radius);
+  background:var(--surface-2);
+}
+.refer-code > .num{
+  flex:1; min-width:120px; font-size:16px; font-weight:600; letter-spacing:.06em;
+  color:var(--accent-ink);
+}
+.refer-row{ display:flex; flex-direction:column; gap:6px; }
+.refer-row-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  font-size:13.5px; font-weight:600;
+}
+.refer-banner{
+  margin-bottom:16px; padding:11px 13px; border-radius:var(--radius);
+  border:1px solid var(--border-strong); background:var(--accent-wash);
+  font-size:12.5px; line-height:1.55; color:var(--text-secondary);
+}
+.refer-banner strong{ color:var(--text-primary); }

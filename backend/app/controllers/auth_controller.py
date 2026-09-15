@@ -32,7 +32,11 @@ def _auth_out(service: AuthService, user) -> AuthOut:
 def register(payload: RegisterIn, session: SessionDep) -> AuthOut:
     service = AuthService(session)
     user = service.register(
-        payload.email, payload.password, payload.display_name, payload.household_name
+        payload.email,
+        payload.password,
+        payload.display_name,
+        payload.household_name,
+        payload.referral_code,
     )
     return _auth_out(service, user)
 

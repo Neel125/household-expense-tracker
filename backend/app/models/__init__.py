@@ -10,6 +10,7 @@ from app.models.income import IncomeSource
 from app.models.investment import Investment
 from app.models.invite import Invite
 from app.models.member import Member
+from app.models.referral import Referral
 from app.models.reward import (
     ChallengeEnrollment,
     CoinTransaction,
@@ -32,6 +33,7 @@ __all__ = [
     "Investment",
     "Invite",
     "Member",
+    "Referral",
     "Transaction",
     "User",
 ]

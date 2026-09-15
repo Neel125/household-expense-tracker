@@ -1,15 +1,34 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell from './AuthShell';
 import { Button, Field } from '../../components/ui';
+import { api } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const referralCode = (params.get('ref') || '').trim().toUpperCase();
   const [form, setForm] = useState({ displayName: '', householdName: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [referrer, setReferrer] = useState(null);
+
+  // Name whoever shared the link, so the code in the URL isn't an opaque
+  // string. A code that doesn't resolve is simply not mentioned — it must
+  // never stand between someone and their account.
+  useEffect(() => {
+    if (!referralCode) return;
+    let live = true;
+    api.referrals
+      .preview(referralCode)
+      .then((res) => live && res?.valid && setReferrer(res))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [referralCode]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -23,6 +42,7 @@ export default function RegisterPage() {
         password: form.password,
         displayName: form.displayName.trim(),
         householdName: form.householdName.trim(),
+        referralCode,
       });
       navigate('/', { replace: true });
     } catch (err) {
@@ -42,6 +62,13 @@ export default function RegisterPage() {
         </span>
       }
     >
+      {referrer && (
+        <div className="refer-banner">
+          <strong>{referrer.householdName}</strong> invited you. Log {referrer.neededExpenses}{' '}
+          expenses over {referrer.neededDays} separate days and you'll earn{' '}
+          {referrer.welcomeCoins} coins — they'll earn some too.
+        </div>
+      )}
       <form onSubmit={submit}>
         <Field label="Your name">
           <input type="text" value={form.displayName} onChange={set('displayName')} required autoFocus />

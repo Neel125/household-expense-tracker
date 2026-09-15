@@ -53,6 +53,7 @@ from app.services.events import (
 from app.services.game_service import GameService, GameStatus
 from app.services.health_service import HealthReport, HealthService
 from app.services.portfolio_service import PortfolioService
+from app.services.referral_service import ReferralService
 from app.services.reward_rules import Level
 
 # How far back a settle sweep will pay. Older months are still scored
@@ -106,6 +107,7 @@ class RewardsService:
         self.investments = InvestmentRepository(session)
         self.debts = DebtRepository(session)
         self.portfolio = PortfolioService(session)
+        self.referrals = ReferralService(session)
         self.games = GameService(session)
 
     # ------------------------------------------------------------- reactions
@@ -334,6 +336,79 @@ class RewardsService:
         # before those handlers were wired — same event keys, so a later
         # create never double-pays.
         self._settle_portfolio(household_id, user_id)
+        self._settle_referrals(household_id, user_id)
+
+    def _settle_referrals(self, household_id: int, user_id: Optional[int]) -> None:
+        """Pay both sides of a referral, once it has qualified.
+
+        Handled symmetrically — this household's own referrals *and* the
+        one that brought it in — so whichever side opens the app first
+        moves the row to `qualified`, and the other side's payout is
+        waiting the next time they look. Both awards key on the referral
+        id, so running from both sides pays each exactly once.
+        """
+        for referral, progress in self.referrals.made_by(household_id):
+            if referral.status != "qualified" and progress.qualified:
+                self.referrals.mark_qualified(referral)
+            if referral.status != "qualified" and not progress.qualified:
+                continue
+            if not self._referral_within_cap(household_id, referral):
+                continue
+            self.ledger.award(
+                household_id,
+                "REFERRAL_QUALIFIED",
+                f"REFERRAL_QUALIFIED:referral:{referral.id}",
+                user_id=user_id,
+                reference_type="referral",
+                reference_id=str(referral.id),
+                note=f"{referral.referred_name or 'A friend'} started tracking",
+            )
+
+        joined = self.referrals.joined_through(household_id)
+        if not joined:
+            return
+        referral, progress = joined
+        if referral.status != "qualified" and progress.qualified:
+            self.referrals.mark_qualified(referral)
+        if referral.status != "qualified" and not progress.qualified:
+            return
+        self.ledger.award(
+            household_id,
+            "REFERRAL_WELCOME",
+            f"REFERRAL_WELCOME:referral:{referral.id}",
+            user_id=user_id,
+            reference_type="referral",
+            reference_id=str(referral.id),
+            note=f"Joined through {self.referrals.referrer_name(referral) or 'a referral'}",
+        )
+
+    def _referral_within_cap(self, household_id: int, referral) -> bool:
+        """A ceiling on referral payouts per calendar month.
+
+        Qualification already costs an abuser days of pretending to be a
+        household per fake account; this bounds the damage if someone has
+        that patience anyway. A referral already paid is never re-counted,
+        so an existing payout can't be pushed over the line by later ones.
+        """
+        key = f"REFERRAL_QUALIFIED:referral:{referral.id}"
+        if self.ledger.already_awarded(household_id, key):
+            return True
+        month_start = f"{month_math.this_month_key()}-01T00:00:00+00:00"
+        paid_this_month = self.ledger.coins.count_for_kind_since(
+            household_id, "REFERRAL_QUALIFIED", month_start
+        )
+        if paid_this_month < reward_rules.REFERRAL_MONTHLY_CAP:
+            return True
+        self.ledger.flag(
+            household_id,
+            f"referral-cap:{month_math.this_month_key()}",
+            note=(
+                f"Monthly limit of {reward_rules.REFERRAL_MONTHLY_CAP} referral payouts "
+                "reached — later referrals this month are not rewarded"
+            ),
+            user_id=None,
+        )
+        return False
 
     @staticmethod
     def _settle_months(current_month: str) -> list[str]:

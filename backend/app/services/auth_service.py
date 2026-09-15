@@ -32,7 +32,14 @@ class AuthService:
         self.members = MemberRepository(session)
 
     # ---- registration / login -------------------------------------------
-    def register(self, email: str, password: str, display_name: str, household_name: str) -> User:
+    def register(
+        self,
+        email: str,
+        password: str,
+        display_name: str,
+        household_name: str,
+        referral_code: str = "",
+    ) -> User:
         email = (email or "").strip()
         display_name = (display_name or "").strip()
         if not email or not password:
@@ -51,10 +58,11 @@ class AuthService:
         )
         self._seed_household(household.id, now)
 
+        name_hint = display_name or email.split("@")[0]
         member = self.members.add(
             Member(
                 household_id=household.id,
-                name=display_name or email.split("@")[0],
+                name=name_hint,
                 relation="Self",
                 created_at=now,
             )
@@ -70,6 +78,17 @@ class AuthService:
                 created_at=now,
             )
         )
+
+        # A referral code is a bonus, never a gate: an unknown or
+        # self-referring code attaches nothing and the signup still
+        # succeeds. Nothing is paid here — the referral starts `pending`
+        # and only earns once the new household has actually been used.
+        if referral_code:
+            from app.services.referral_service import ReferralService
+
+            ReferralService(self.session).attach(
+                referral_code, household.id, user.id, display_name or name_hint
+            )
         return user
 
     def login(self, email: str, password: str) -> User:

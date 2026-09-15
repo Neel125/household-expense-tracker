@@ -12,5 +12,9 @@ class Household(SQLModel, table=True):
     # The total monthly spending envelope; category budgets are a
     # percentage of this. 0 = not set yet.
     monthly_budget: float = 0
+    # Shareable "refer a friend" code, e.g. "LC-7KQ2M4". Generated on
+    # first use rather than at signup, so households that never open the
+    # Rewards page never get one.
+    referral_code: str = Field(default="", index=True)
     created_at: str = ""
     updated_at: Optional[str] = None

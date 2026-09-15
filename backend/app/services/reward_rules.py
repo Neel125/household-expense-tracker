@@ -48,6 +48,11 @@ RULES: dict[str, Rule] = {
         Rule("LOAN_COMPLETED_HOME", 1000, "Home loan paid off"),
         Rule("LOAN_COMPLETED_CAR", 500, "Car loan paid off"),
         Rule("LOAN_COMPLETED_OTHER", 100, "Loan paid off"),
+        # Referrals. Paid on *qualification*, never on signup — see the
+        # REFERRAL_* thresholds below for what a referred household has to
+        # do before either side is paid.
+        Rule("REFERRAL_QUALIFIED", 500, "Friend referred"),
+        Rule("REFERRAL_WELCOME", 100, "Joined with a referral"),
         # Variable payouts: the amount comes from the challenge definition
         # / the size of the score improvement, so `coins` is unused.
         Rule("CHALLENGE_COMPLETED", 0, "Challenge completed"),
@@ -90,6 +95,27 @@ BURST_WINDOW_SECONDS = 300
 # fire. One entry every five seconds, sustained for five minutes, is a
 # script — a person bulk-entering receipts stays well under this.
 BURST_MAX_EVENTS = 60
+
+# ------------------------------------------------------------------ referrals
+# Paying on signup would be free money: make ten throwaway addresses, earn
+# ten payouts. So nothing is paid until the referred household looks like a
+# household — it has to log real expenses, on separate days, which cannot be
+# faked in one sitting and costs an abuser days per fake account.
+REFERRAL_MIN_EXPENSES = 10
+REFERRAL_MIN_ACTIVE_DAYS = 3
+# Days are counted from `created_at` (when a row was actually entered), not
+# the transaction date, so back-filling a month in one evening is one day of
+# activity rather than thirty.
+#
+# A hard ceiling on payouts per calendar month bounds the damage if someone
+# does find the patience to run fake households, and is far above what a
+# real person refers.
+REFERRAL_MONTHLY_CAP = 10
+# Codes avoid 0/O/1/I so they survive being read aloud or copied off a
+# screenshot.
+REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+REFERRAL_CODE_LENGTH = 6
+REFERRAL_CODE_PREFIX = "LC-"
 
 
 # --------------------------------------------------------------------- levels

@@ -52,12 +52,13 @@ expense-tracker/
 │   │   ├── models/            SQLModel tables (Household, User, Invite, Member,
 │   │   │                      Account, Category, CategoryBudget, IncomeSource,
 │   │   │                      Goal, Transaction, CoinTransaction,
-│   │   │                      ChallengeEnrollment, HealthSnapshot)
+│   │   │                      ChallengeEnrollment, HealthSnapshot, Referral)
 │   │   ├── schemas/           Pydantic request/response DTOs (camelCase on the wire)
 │   │   ├── repositories/      data access (household-scoped, generic base)
 │   │   ├── services/          business logic + invariants
 │   │   │   ├── events.py        in-process domain event bus
 │   │   │   ├── portfolio_math.py    amortisation + contribution growth
+│   │   │   ├── referral_service.py  refer-a-friend codes + qualification
 │   │   │   ├── portfolio_service.py holdings joined with their transactions
 │   │   │   ├── reward_rules.py  the reward catalogue (coins, levels, challenges)
 │   │   │   ├── coin_ledger.py   the only writer of coins
@@ -153,6 +154,7 @@ habit worth building; the real money is in behaviour:
 | Improve the health score | +25 per point, max 200 |
 | Complete a challenge | +100…200 |
 | Complete a financial goal | +500 |
+| Refer a friend who starts tracking | +500 (they get +100) |
 
 Coins drive a level — 🌱 Beginner, 🌿 Saver (500), 🌳 Smart Saver (2,000),
 💎 Financial Pro (5,000) — and each level lists what it unlocks. There is
@@ -255,12 +257,55 @@ settles as a side effect), `GET /api/rewards/health`,
 `POST /api/rewards/review`, `POST /api/rewards/challenges/{key}/join`
 and `DELETE /api/rewards/challenges/{key}`.
 
+### Refer a friend
+
+The one reward that pays for bringing in someone new — and the one that
+needed the most care, because a referral programme that pays on sign-up
+is a programme people farm.
+
+**An invite is not a referral.** An invite adds a person to *your*
+household: they share your books, so paying coins for one would be free
+money for typing in an email address. A referral creates a **separate
+household**, and that distinction is what makes it payable at all.
+
+**Nothing is paid for signing up.** A referral is created `pending` and
+earns nothing until the referred household behaves like a household:
+
+| Requirement | Why |
+| --- | --- |
+| 10 expenses logged | one or two rows is a tyre-kick, not a user |
+| on 3 separate days | the part that can't be faked in one sitting |
+
+Days are counted from when a row was *entered*, not the date on it — so
+typing ten expenses in one evening is one day of activity, not ten.
+Meeting both pays the referrer **500** coins and the new household a
+**100**-coin welcome bonus, both keyed on the referral id so each is paid
+exactly once no matter which side's app settles first.
+
+**What is left, and why it's acceptable.** Someone can still register a
+second household with their own code — there is no identity verification
+here, and pretending otherwise would be the real mistake. What that costs
+them is the qualification: ten expenses across three separate days, per
+fake household, before a single coin appears. A monthly ceiling of 10
+rewarded referrals bounds the damage if anyone has that patience, and
+hitting it writes a flag row in the ledger like every other withheld
+award.
+
+A bad code never costs someone their account: an unknown, malformed or
+self-referring code attaches nothing and the sign-up proceeds. The
+`/register?ref=CODE` link names the household that shared it, and the
+sign-up copy is generated from the thresholds rather than repeating them,
+so changing `REFERRAL_MIN_*` updates both screens.
+
+The API is `GET /api/referrals` (your code, who you have brought in, and
+how far along each of them is) and the public
+`GET /api/referrals/preview/{code}`, which returns a household name and
+nothing else — a code is not a way to enumerate anything worth having.
+The referrer never sees a referred user's email address.
+
 ### What is deliberately not built
 
 - **Redemption / gift cards** — non-monetary rewards first, as above.
-- **Referral coins.** The invite system exists, but coins are
-  household-scoped, so paying for invites would be farmable by inviting
-  throwaway addresses. It needs conversion tracking before it's safe.
 - **Cancelled subscriptions are inferred, not self-reported** — a
   Subscriptions-category merchant billed for three straight months and
   then absent counts as cancelled. Nobody has to remember to tell the app.

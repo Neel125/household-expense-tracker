@@ -16,6 +16,7 @@ const EMPTY = {
   debts: [],
   budget: { monthlyBudget: 0, categories: [] },
   rewards: null,
+  referrals: null,
 };
 
 // Loads and caches every household collection once the user is signed in,
@@ -42,6 +43,7 @@ export function DataProvider({ children }) {
         debts,
         budget,
         rewards,
+        referrals,
       ] = await Promise.all([
         api.transactions.list(),
         api.members.list(),
@@ -61,6 +63,12 @@ export function DataProvider({ children }) {
           console.error('Rewards unavailable', e);
           return null;
         }),
+        // Same treatment as rewards: a bonus layer, never a reason the
+        // books fail to load.
+        api.referrals.summary().catch((e) => {
+          console.error('Referrals unavailable', e);
+          return null;
+        }),
       ]);
       setData({
         transactions,
@@ -73,6 +81,7 @@ export function DataProvider({ children }) {
         debts,
         budget,
         rewards,
+        referrals,
       });
     } catch (e) {
       console.error('Failed to load data', e);
