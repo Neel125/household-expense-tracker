@@ -26,12 +26,53 @@ class InvestmentIn(CamelModel):
     notes: str = ""
 
 
+class InvestmentWithdrawIn(CamelModel):
+    """Close a holding and credit the proceeds to a bank/cash account."""
+
+    date: str = ""
+    # None = use the holding's current effective value.
+    amount: Optional[float] = None
+    account_name: str
+    member: str = ""
+    payment_mode: str = "Net Banking"
+
+
+class InvestmentReinvestIn(CamelModel):
+    """Close a holding and open a successor. The matured proceeds become
+    the new opening invested; only `addOnAmount` is logged as a
+    transaction from the bank."""
+
+    date: str = ""
+    # Matured proceeds. None = the holding's current effective value.
+    amount: Optional[float] = None
+    add_on_amount: float = 0
+    account_name: str = ""
+    new_name: str = ""
+    new_maturity_date: str = ""
+    annual_return_pct: Optional[float] = None
+    member: str = ""
+    notes: str = ""
+    payment_mode: str = "Net Banking"
+
+
 class ContributionOut(CamelModel):
     transaction_id: int
     date: str
     name: str
     amount: float
     grown_to: float
+
+
+class LedgerEntryOut(CamelModel):
+    """One auto-logged (or linked) row on a holding: money in, money out,
+    or an add-on at renewal."""
+
+    transaction_id: int
+    date: str
+    name: str
+    amount: float
+    kind: str  # contribution | withdrawal
+    provider_type: str = ""
 
 
 class InvestmentOut(CamelModel):
@@ -48,6 +89,12 @@ class InvestmentOut(CamelModel):
     notes: str
     created_at: str = ""
     updated_at: Optional[str] = None
+    is_closed: bool = False
+    closed_at: str = ""
+    closed_to_account: str = ""
+    successor_id: Optional[int] = None
+    # What the holding was worth at close. Zero while it is still open.
+    closed_value: float = 0
 
     # --- derived from linked Investment transactions
     contributed: float = 0
@@ -84,6 +131,11 @@ class InvestmentOut(CamelModel):
                         "updated_at",
                     )
                 },
+                "is_closed": bool(getattr(investment, "closed", False)),
+                "closed_at": getattr(investment, "closed_at", "") or "",
+                "closed_to_account": getattr(investment, "closed_to_account", "") or "",
+                "successor_id": getattr(investment, "successor_id", None),
+                "closed_value": view.closed_value,
                 "contributed": view.contributed,
                 "total_invested": view.total_invested,
                 "projected_value": view.projected_value,
@@ -98,14 +150,29 @@ class InvestmentOut(CamelModel):
 
 
 class InvestmentDetailOut(CamelModel):
-    """One holding plus every contribution that built it."""
+    """One holding plus every contribution that built it, and the full
+    in/out ledger (withdrawals and add-ons included)."""
 
     investment: InvestmentOut
     contributions: list[ContributionOut]
+    ledger: list[LedgerEntryOut] = []
 
     @classmethod
-    def of(cls, investment, view: InvestmentView) -> "InvestmentDetailOut":
+    def of(
+        cls,
+        investment,
+        view: InvestmentView,
+        ledger: Optional[list[LedgerEntryOut]] = None,
+    ) -> "InvestmentDetailOut":
         return cls(
             investment=InvestmentOut.of(investment, view),
             contributions=[ContributionOut.model_validate(c) for c in view.contributions],
+            ledger=ledger or [],
         )
+
+
+class InvestmentReinvestOut(CamelModel):
+    """The closed original holding and the successor it rolled into."""
+
+    closed: InvestmentOut
+    created: InvestmentOut

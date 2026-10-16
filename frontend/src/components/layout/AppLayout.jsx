@@ -7,6 +7,7 @@ import { useData } from '../../context/DataContext';
 
 const TITLES = {
   '/': 'Dashboard',
+  '/assistant': 'Assistant',
   '/add': 'Add',
   '/transactions': 'Transactions',
   '/accounts': 'Accounts',
@@ -14,6 +15,8 @@ const TITLES = {
   '/budgets': 'Budgets',
   '/goals': 'Goals',
   '/portfolio': 'Portfolio',
+  '/garage': 'Garage',
+  '/rewards': 'Rewards',
   '/tools': 'Tools',
   '/family': 'Family',
   '/profile': 'Profile',

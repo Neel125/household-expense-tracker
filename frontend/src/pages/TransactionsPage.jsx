@@ -37,7 +37,14 @@ export default function TransactionsPage() {
     if (filterMonth) l = l.filter((t) => monthKey(t.date) === filterMonth);
     if (filterMember) l = l.filter((t) => t.member === filterMember);
     if (filterKind === 'Income') l = l.filter((t) => t.type === 'Income');
-    else if (filterKind) l = l.filter((t) => t.necessity === filterKind && t.type !== 'Income');
+    else if (filterKind === 'Investment') {
+      l = l.filter(
+        (t) =>
+          t.type === 'Investment' ||
+          t.type === 'Investment Withdrawal' ||
+          t.necessity === 'Investment'
+      );
+    } else if (filterKind) l = l.filter((t) => t.necessity === filterKind && t.type !== 'Income');
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       l = l.filter(

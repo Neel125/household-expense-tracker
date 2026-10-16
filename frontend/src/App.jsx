@@ -7,6 +7,7 @@ import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import AcceptInvitePage from './pages/auth/AcceptInvitePage';
 import DashboardPage from './pages/DashboardPage';
+import AssistantPage from './pages/AssistantPage';
 import AddTransactionPage from './pages/AddTransactionPage';
 import TransactionsPage from './pages/TransactionsPage';
 import AccountsPage from './pages/AccountsPage';
@@ -15,6 +16,7 @@ import BudgetsPage from './pages/BudgetsPage';
 import GoalsPage from './pages/GoalsPage';
 import PortfolioPage from './pages/PortfolioPage';
 import RewardsPage from './pages/RewardsPage';
+import GaragePage from './pages/GaragePage';
 import FamilyPage from './pages/FamilyPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
@@ -46,6 +48,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AuthedApp />}>
           <Route index element={<DashboardPage />} />
+          <Route path="assistant" element={<AssistantPage />} />
           <Route path="add" element={<AddTransactionPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="accounts" element={<AccountsPage />} />
@@ -54,6 +57,7 @@ export default function App() {
           <Route path="goals" element={<GoalsPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="rewards" element={<RewardsPage />} />
+          <Route path="garage" element={<GaragePage />} />
           <Route path="tools" element={<ToolsLayout />}>
             <Route index element={<ToolsIndex />} />
             <Route path="home-loan" element={<HomeLoanCalculator />} />

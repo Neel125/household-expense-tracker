@@ -34,6 +34,13 @@ repositories → models), backed by **PostgreSQL** (SQLite for local dev).
 - **Rewards** — Finance Coins earned for financial discipline (never for
   spending), a tracking streak, short-term challenges, levels and a
   Financial Health Score. See [Rewards and Finance Coins](#rewards-and-finance-coins).
+- **AI assistant** — a chat that answers questions about your household's
+  money from your own records, backed by a LangChain deep agent running
+  as its own service. The same agent categorises expenses, flags unusual
+  spending, tracks the budget at pace, forecasts next month, analyses the
+  portfolio, watches SIPs / deposits / EMIs / cards, lists upcoming bills,
+  writes the monthly report and recommends what to do next against your
+  goals. See [The AI assistant](#the-ai-assistant).
 - **Dashboard** — a plain-language insight strip, where every rupee of
   the month went (expenses vs investments vs loan payments), expense-vs-
   investment trends, a portfolio and debt snapshot, cumulative
@@ -70,6 +77,11 @@ expense-tracker/
 │   │   └── migrate_legacy.py  folds any old single-tenant data into a household
 │   ├── seed.py                sample data + demo login
 │   └── requirements.txt
+├── ai-agent/                 LangChain deep agent (its own container)
+│   ├── app/finance/           every number: budgets, anomalies, forecasts,
+│   │                          amortisation. No LLM touches these.
+│   ├── app/agent/             tools, prompts, subagents, typed output
+│   └── README.md              how it works and how to run it
 └── frontend/                 React + Vite + React Router (multi-page)
     └── src/
         ├── main.jsx           Router + Auth/Toast providers
@@ -84,8 +96,10 @@ expense-tracker/
         ├── lib/compute.js     accrual/necessity/analytics formulas
         ├── lib/insights.js    the dashboard's plain-language observations
         ├── lib/portfolioMeta.js  investment/debt kind labels, icons, colours
-        └── pages/             Dashboard, Add, Transactions, Accounts, Income,
-                               Budgets, Goals, Rewards, Family, Settings, auth/
+        ├── components/assistant/ the chat answer + pending indicator
+    ├── lib/assistant.js   replaying a conversation for follow-up questions
+    └── pages/             Dashboard, Assistant, Add, Transactions, Accounts,
+                               Income, Budgets, Goals, Rewards, Family, auth/
 ```
 
 Authentication is real now: passwords are bcrypt-hashed, a JWT is issued
@@ -130,6 +144,139 @@ household-scoped table; the old settings row that once held cards/loans
 has been replaced by first-class **Account** records, and any pre-existing
 single-tenant database is folded into one default household on first
 startup (`app/migrate_legacy.py`).
+
+## The AI assistant
+
+A **LangChain deep agent** (`ai-agent/`) that reads the household's books
+and answers questions about them. It runs as its own service: the
+backend calls it over HTTP when a user asks for something, and nothing
+else talks to it.
+
+```
+frontend ──▶ backend (FastAPI)  ──HTTP──▶  ai-agent
+                   │                            │
+                   └──── writes ──▶ Postgres ◀── reads (READ ONLY)
+```
+
+Separate container because LangChain's dependency tree has no business
+in the API image, and because an agent run that takes thirty seconds
+should not occupy a worker that is also serving the transaction list.
+
+### Python computes, the model interprets
+
+`ai-agent/app/finance/` is ordinary arithmetic over the ledger — medians,
+budget pro-rating, reducing-balance amortisation, robust z-scores. **No
+LLM produces a single rupee figure.** The agent's tools return those
+results and the system prompt forbids the model from doing arithmetic of
+its own: if it wants a number no tool gives it, it has to say so.
+
+That is what makes it safe to put in front of someone's money. A model
+that adds two numbers together produces a result that looks exactly as
+authoritative as a real one and is wrong often enough to matter.
+
+It also means the figures are worth something without the prose, so
+every capability is addressable twice:
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/ai/analysis/{capability}` | The figures alone. No model, identical every run — this is what a dashboard card should call. |
+| `POST /api/ai/{capability}` | The deep agent's typed narrative over exactly those figures. |
+| `GET /api/ai/capabilities` | What the assistant can do. |
+
+### The capabilities
+
+| Capability | What it answers |
+| --- | --- |
+| `categorise` | Which category each uncategorised expense belongs to |
+| `anomalies` | What spending is unusual **for this household** |
+| `budget` | Budget vs actual, at pace, per category |
+| `forecast` | What next month will cost, committed vs variable |
+| `investments` | Holdings, allocation, returns, stalled SIPs, debts |
+| `obligations` | SIPs, deposits maturing, loans, credit cards |
+| `bills` | What is due in the next N days |
+| `report` | The monthly financial report |
+| `recommendations` | What to do next, against the household's own goals |
+| `ask` | A free-form question about their finances |
+
+Categorisation checks the household's *own* past choices before the
+merchant table, because "you have filed Sharma Kirana under Groceries
+four times" is better evidence than any rule we could write. Anomaly
+detection compares a household against its own six-month history using
+median-based statistics, so one genuine one-off — a wedding, an annual
+premium — does not inflate the threshold meant to catch the next one.
+Forecasts separate **committed** money (rent, EMIs, SIPs, subscriptions —
+already decided, not predicted) from **variable**, and always report a
+range with a confidence rather than a single number.
+
+### The chat page
+
+**Assistant** in the sidebar is a chat: ask a question in plain language
+and the agent answers from your own books. It opens with the questions
+worth asking rather than a blank box, because a blank box tells nobody
+what this can actually do.
+
+An answer is not a paragraph — it is a typed result, rendered as such:
+the direct answer, then any insights with **the figure each one rests
+on**, then actions with their expected effect, then the figures used, and
+a "show how this was worked out" line naming every tool that was read. A
+household can check the assistant instead of trusting it.
+
+Three things about it are worth knowing:
+
+- **Follow-ups work.** "And the month before?" resolves against the
+  previous question. The agent itself is stateless — it rebuilds the
+  books from scratch every call — so the page replays the last six
+  exchanges with each question. Prior *answers* are replayed, never
+  prior tool results: stale figures must not be presented to the model
+  as current, and the prompt tells it to call the tools again.
+- **It stays on topic.** Anything outside this household's money — market
+  predictions, which fund to buy, general knowledge — gets one friendly
+  sentence saying it only covers their finances, and a suggestion of
+  something it can answer. It does not answer anyway with a caveat
+  attached.
+- **A run takes 10–30 seconds**, so the page says what it is doing and
+  counts, and **Stop** abandons it.
+
+The transcript lives in `sessionStorage`: it survives a refresh and a tab
+switch, and is gone when the tab closes. A household's money discussed in
+detail, often on a shared computer, is not something to leave lying in
+`localStorage`.
+
+### Tenancy and safety
+
+- The household id comes from the **authenticated user**, set by
+  `app/services/ai_service.py`. No route accepts one from a client.
+- The agent's tools are **closures over one loaded household snapshot**,
+  so a tool has no id to get wrong and a prompt injected through a
+  transaction name has no id to name.
+- The agent's database connection is **read-only** —
+  `default_transaction_read_only=on` on every Postgres connection.
+- The two services authenticate with a **shared secret**
+  (`AGENT_SERVICE_TOKEN`), compared in constant time.
+- The agent is **optional**. Leave `AGENT_SERVICE_URL` or the token
+  unset and `/api/ai/*` returns a clean 503 while everything else keeps
+  working. A family's expense tracker must not stop working because an
+  LLM service is down.
+
+### Running it
+
+The model runs on **Ollama, on your own machine** — the household's
+figures never reach a vendor, and there is no API key to manage.
+
+```bash
+ollama pull llama3.1:8b               # must be a tool-calling model
+OLLAMA_HOST=0.0.0.0 ollama serve      # so the container can reach it
+export AGENT_SERVICE_TOKEN=$(openssl rand -hex 32)
+docker compose up --build
+```
+
+No Ollama on this machine? `docker compose --profile ollama up -d` starts
+one in the compose network; then set `OLLAMA_BASE_URL=http://ollama:11434`
+and pull the model with `docker compose exec ollama ollama pull llama3.1:8b`.
+
+With Ollama unreachable, `/api/ai/analysis/*` still works — it never
+calls a model — which is also how to test any of this. Full details in
+[`ai-agent/README.md`](ai-agent/README.md).
 
 ## Rewards and Finance Coins
 
@@ -427,6 +574,15 @@ investment* picker and a `Loan` row gets a *Pays down loan* picker:
   where the maturity value is just arithmetic, and a rough guide for a
   SIP until you enter the real number. Type a **current value** and that
   wins; leave it at 0 and the projection is shown, labelled as such.
+- **Withdraw to a bank, or reinvest at maturity.** On any open holding,
+  **Withdraw** closes it and credits the proceeds to a bank / debit /
+  cash account (`Investment Withdrawal` — it raises the account balance
+  without counting as household income). **Reinvest** closes it and
+  opens a successor whose opening invested is the matured amount; the
+  only transaction logged is an optional **add-on** paid from a bank.
+  The rolled principal is not a new debit. Closed holdings drop out of
+  net worth (the money now sits in the bank or in the new holding) but
+  stay on the list for history.
 - **Loan EMIs are split into interest and principal.** Interest is
   charged on the balance outstanding at the time of the payment, for the
   time since the previous one; whatever the payment covers beyond that

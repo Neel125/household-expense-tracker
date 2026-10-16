@@ -28,6 +28,47 @@ services:
         value: "false"
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: AGENT_SERVICE_URL
+        # Render gives every service an internal hostname on the private
+        # network; only the web service is reachable from the internet.
+        value: http://ledger-ai-agent:8100
+      - key: AGENT_SERVICE_TOKEN
+        fromService:
+          name: ledger-ai-agent
+          type: pserv
+          envVarKey: AGENT_SERVICE_TOKEN
+
+  # The household finance agent. A private service: it can read every
+  # household's books, so it must not be reachable from the internet —
+  # only the web service calls it, over Render's private network.
+  - type: pserv
+    name: ledger-ai-agent
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./ai-agent/Dockerfile
+    dockerContext: ./ai-agent
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ledger-db
+          property: connectionString
+      - key: AGENT_SERVICE_TOKEN
+        generateValue: true
+      # The agent talks to an Ollama host. Render has no GPU plan that
+      # will run one, so point this at an Ollama you host yourself
+      # (a VM, a home box over a tunnel) and set it in the dashboard —
+      # the URL is deployment-specific and may carry a credential.
+      # Leave it unset and /agent/* answers 503 while the deterministic
+      # /analysis/* endpoints carry on.
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: AGENT_MODEL
+        value: llama3.1:8b
+      - key: AGENT_NUM_CTX
+        value: "16384"
+      - key: PORT
+        value: "8100"
 
 databases:
   - name: ledger-db

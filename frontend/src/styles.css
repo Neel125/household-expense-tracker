@@ -914,6 +914,7 @@ svg text{ font-family:var(--font-sans); }
   padding:12px 14px; border:1px solid var(--border); border-radius:12px;
   background:var(--surface-2);
 }
+.asset-row.is-closed{ opacity:0.72; }
 .asset-icon{
   width:40px; height:40px; border-radius:11px;
   display:flex; align-items:center; justify-content:center;
@@ -1240,3 +1241,250 @@ svg text{ font-family:var(--font-sans); }
   font-size:12.5px; line-height:1.55; color:var(--text-secondary);
 }
 .refer-banner strong{ color:var(--text-primary); }
+
+/* =============================== GARAGE =============================== */
+.garage-layout{
+  display:grid; grid-template-columns:minmax(220px, .85fr) minmax(0, 1.4fr);
+  gap:16px; align-items:start;
+}
+.garage-list{ display:flex; flex-direction:column; gap:8px; }
+.garage-card{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  padding:12px 14px; border-radius:var(--radius); cursor:pointer;
+  background:var(--surface); background-image:var(--grad-surface);
+  border:1px solid var(--border); color:inherit; box-shadow:var(--shadow);
+}
+.garage-card:hover{ border-color:var(--border-strong); }
+.garage-card.selected{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset, var(--shadow); }
+.garage-card-icon{
+  width:40px; height:40px; border-radius:12px; flex:0 0 auto;
+  display:grid; place-items:center; font-size:20px; background:var(--surface-2);
+}
+.garage-card-main{ flex:1; min-width:0; }
+.garage-card-name{ font-weight:600; font-size:14px; }
+.garage-detail{ min-width:0; }
+.garage-papers{
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap:10px; margin-bottom:14px;
+}
+.garage-paper{
+  padding:10px 12px; border-radius:var(--radius-sm); background:var(--surface-2);
+  border:1px solid var(--border); display:flex; flex-direction:column; gap:4px;
+}
+.garage-paper-val{ font-weight:600; font-size:14px; }
+.garage-detail-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  margin:16px 0 12px;
+}
+.garage-records{ display:flex; flex-direction:column; gap:8px; }
+.garage-record{
+  display:grid; grid-template-columns:36px minmax(0,1fr) auto auto;
+  gap:10px; align-items:center;
+  padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border);
+  background:var(--surface);
+}
+.garage-record-icon{
+  width:36px; height:36px; border-radius:10px; background:var(--surface-2);
+  display:grid; place-items:center; font-size:16px;
+}
+.garage-record-title{ font-weight:600; font-size:13.5px; }
+.garage-record-meta{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.garage-record-actions{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+@media (max-width:800px){
+  .garage-layout{ grid-template-columns:1fr; }
+  .garage-record{
+    grid-template-columns:36px minmax(0,1fr);
+    grid-template-areas:
+      "icon main"
+      "meta meta"
+      "act act";
+  }
+  .garage-record-icon{ grid-area:icon; }
+  .garage-record-main{ grid-area:main; }
+  .garage-record-meta{ grid-area:meta; align-items:flex-start; flex-direction:row; flex-wrap:wrap; }
+  .garage-record-actions{ grid-area:act; justify-content:flex-start; }
+}
+
+/* ============================== ASSISTANT ==============================
+   The chat page. Deliberately *not* a fixed-height app shell with its own
+   scroller: the page scrolls like every other page and the composer is
+   sticky at the bottom of the viewport. That survives the mobile top bar,
+   the on-screen keyboard and dynamic viewport units without any of the
+   height arithmetic those otherwise force.
+   ====================================================================== */
+.chat-page{
+  display:flex; flex-direction:column; min-height:0;
+  /* Enough height that `margin-top:auto` on the composer pushes it to the
+     bottom of the screen when the thread is short. The subtraction is
+     main's own padding — approximate on purpose, since being a few pixels
+     out costs nothing and pinning it exactly would mean hard-coding a
+     clamp() that lives elsewhere. */
+  min-height:calc(100dvh - 110px);
+}
+@media (max-width:1080px){ .chat-page{ min-height:calc(100dvh - 150px); } }
+
+.chat-thread{
+  display:flex; flex-direction:column; gap:18px;
+  padding-bottom:18px; min-width:0;
+}
+
+/* ---- the opening screen */
+.chat-welcome{ max-width:620px; margin:clamp(12px,4vh,44px) auto 8px; text-align:center; }
+.chat-welcome-mark{
+  width:52px; height:52px; margin:0 auto 14px; border-radius:16px;
+  background:var(--grad-brand); color:var(--accent-contrast);
+  display:grid; place-items:center; box-shadow:var(--glow);
+}
+.chat-welcome h2{ font-size:21px; margin:0 0 8px; letter-spacing:-0.02em; }
+.chat-welcome p{ color:var(--text-secondary); font-size:13.5px; line-height:1.65; margin:0 0 22px; }
+.chat-suggestions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.chat-suggestion{
+  font-size:12.5px; font-weight:500; text-align:left; cursor:pointer;
+  padding:9px 13px; border-radius:999px;
+  border:1px solid var(--border); background:var(--surface); color:var(--text-secondary);
+  transition:border-color .16s var(--ease), color .16s var(--ease), transform .16s var(--ease);
+}
+.chat-suggestion:hover{ border-color:var(--accent); color:var(--accent-ink); transform:translateY(-1px); }
+
+/* ---- turns */
+.chat-turn{ display:flex; gap:10px; align-items:flex-start; min-width:0; }
+.chat-turn-user{ justify-content:flex-end; }
+.chat-avatar{
+  width:28px; height:28px; flex:none; border-radius:9px; margin-top:2px;
+  background:var(--grad-brand); color:var(--accent-contrast);
+  display:grid; place-items:center;
+}
+
+.chat-bubble{
+  min-width:0; max-width:min(760px, 100%);
+  border-radius:var(--radius-lg); border:1px solid var(--border);
+  background:var(--surface); background-image:var(--grad-surface);
+  padding:14px 16px; font-size:13.5px; line-height:1.65;
+  box-shadow:var(--shadow); overflow-wrap:break-word;
+}
+/* The user's own words read as something they said, not as a card of
+   data: solid accent, no gradient, no border. */
+.chat-bubble-user{
+  max-width:min(560px, 100%);
+  background:var(--accent); background-image:none; border-color:transparent;
+  color:var(--accent-contrast); white-space:pre-wrap;
+}
+.chat-bubble-error{
+  border-color:color-mix(in oklab, var(--status-critical) 40%, var(--border));
+  display:flex; flex-direction:column; align-items:flex-start; gap:10px;
+}
+
+/* ---- the answer body */
+.chat-answer > p{ margin:0 0 10px; }
+.chat-answer > p:last-child{ margin-bottom:0; }
+.chat-lead{ font-weight:600; color:var(--text-primary); font-size:14px; }
+
+.chat-block{
+  display:flex; flex-direction:column; gap:8px;
+  margin-top:12px; padding-top:12px; border-top:1px solid var(--border);
+}
+.chat-block-label{
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-muted);
+}
+.chat-item{
+  padding:10px 12px; border-radius:var(--radius-sm);
+  background:var(--surface-2); border:1px solid var(--border);
+}
+.chat-item-head{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.chat-item-head strong{ font-size:13px; }
+.chat-item-body{ color:var(--text-secondary); margin-top:4px; }
+
+/* The figure a claim rests on. Monospace because it is a number being
+   quoted from the ledger, and it should look quoted. */
+.chat-evidence{
+  font-family:var(--font-mono); font-size:11.5px; color:var(--text-muted);
+  margin-top:6px; padding-left:9px; border-left:2px solid var(--accent-wash);
+}
+
+.sev{
+  font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  padding:2px 7px; border-radius:999px; flex:none;
+}
+.sev-high{ background:color-mix(in oklab, var(--status-warning) 20%, transparent); color:var(--status-warning); }
+.sev-medium{ background:color-mix(in oklab, var(--series-4) 18%, transparent); color:var(--series-4); }
+.sev-low{ background:var(--surface-2); color:var(--text-muted); }
+
+.chat-figures{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.chat-figure{
+  font-family:var(--font-mono); font-size:11px; padding:3px 8px; border-radius:6px;
+  background:var(--accent-wash); color:var(--accent-ink);
+}
+:root:not([data-theme="light"]) .chat-figure{ color:var(--accent-2); }
+:root[data-theme="dark"] .chat-figure{ color:var(--accent-2); }
+
+.chat-gaps{
+  margin-top:12px; padding:10px 12px; border-radius:var(--radius-sm);
+  background:var(--surface-2); font-size:12.5px; color:var(--text-secondary);
+}
+.chat-gaps strong{ display:block; margin-bottom:4px; color:var(--text-primary); font-size:12px; }
+.chat-gaps ul{ margin:0; padding-left:18px; }
+
+.chat-work{ margin-top:12px; }
+.chat-work-toggle{
+  border:none; background:none; cursor:pointer; padding:0;
+  font-size:11.5px; font-weight:600; color:var(--text-muted); text-decoration:underline;
+  text-underline-offset:3px;
+}
+.chat-work-toggle:hover{ color:var(--accent-ink); }
+.chat-work-body{
+  margin-top:7px; font-family:var(--font-mono); font-size:11px; color:var(--text-muted);
+  display:flex; flex-direction:column; gap:3px;
+}
+
+/* ---- pending */
+.chat-thinking{ display:flex; align-items:center; gap:10px; color:var(--text-muted); font-size:12.5px; }
+.chat-dots{ display:inline-flex; gap:3px; }
+.chat-dots i{
+  width:5px; height:5px; border-radius:50%; background:var(--accent);
+  animation:chat-bounce 1.2s var(--ease) infinite;
+}
+.chat-dots i:nth-child(2){ animation-delay:.16s; }
+.chat-dots i:nth-child(3){ animation-delay:.32s; }
+@keyframes chat-bounce{
+  0%, 60%, 100%{ opacity:.28; transform:translateY(0); }
+  30%{ opacity:1; transform:translateY(-3px); }
+}
+@media (prefers-reduced-motion:reduce){
+  .chat-dots i{ animation:none; opacity:.6; }
+}
+
+/* ---- composer */
+.chat-composer{
+  position:sticky; bottom:0; z-index:5;
+  padding:12px 0 6px; margin-top:auto;
+  /* The thread scrolls under this, so it needs its own backdrop or the
+     text would read straight through the bar. */
+  background:linear-gradient(to bottom, transparent, var(--bg) 22%);
+}
+.chat-composer-row{
+  display:flex; gap:8px; align-items:flex-end;
+  padding:8px; border-radius:var(--radius-lg);
+  border:1px solid var(--border-strong); background:var(--surface);
+  box-shadow:var(--shadow-lg);
+  transition:border-color .16s var(--ease), box-shadow .16s var(--ease);
+}
+.chat-composer-row:focus-within{ border-color:var(--accent); box-shadow:var(--glow); }
+.chat-composer-row textarea{
+  flex:1; min-width:0; min-height:40px; max-height:180px; resize:none;
+  border:none; background:transparent; box-shadow:none; padding:9px 8px;
+  font-size:13.5px; line-height:1.5;
+  field-sizing:content;  /* grows with the text where supported */
+}
+.chat-composer-row textarea:focus{ border:none; box-shadow:none; outline:none; }
+.chat-composer-row .btn{ flex:none; }
+.chat-note{
+  font-size:11px; color:var(--text-muted); text-align:center;
+  padding:8px 4px 2px; line-height:1.5;
+}
+
+@media (max-width:720px){
+  .chat-bubble{ max-width:100%; }
+  .chat-suggestions{ justify-content:stretch; }
+  .chat-suggestion{ width:100%; }
+}

@@ -10,7 +10,9 @@ rules need, using the same conventions:
   "CC Repayment" is cash leaving the bank, not a second expense, so it is
   excluded from spend;
 - Income is not spend, and Investments are savings rather than
-  consumption, so neither counts against a budget.
+  consumption, so neither counts against a budget. An
+  `Investment Withdrawal` is money coming back from a holding: it
+  credits a bank without counting as income or spend.
 
 If those rules ever change, they change in both places — the duplication
 is the price of computing rewards server-side, and it is kept to this one
@@ -24,7 +26,7 @@ from typing import Iterable, Sequence
 from app.models import Account, Category, IncomeSource, Transaction
 
 # Transaction types that are not day-to-day spend.
-_NOT_SPEND = {"CC Repayment", "Income"}
+_NOT_SPEND = {"CC Repayment", "Income", "Investment Withdrawal"}
 
 
 def month_key(date_str: str) -> str:

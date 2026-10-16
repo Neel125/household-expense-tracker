@@ -85,6 +85,37 @@ export const api = {
     create: (data) => http.post('/api/investments', data),
     update: (id, data) => http.put(`/api/investments/${id}`, data),
     remove: (id) => http.del(`/api/investments/${id}`),
+    withdraw: (id, data) => http.post(`/api/investments/${id}/withdraw`, data),
+    reinvest: (id, data) => http.post(`/api/investments/${id}/reinvest`, data),
+  },
+  vehicles: {
+    list: () => http.get('/api/vehicles'),
+    get: (id) => http.get(`/api/vehicles/${id}`),
+    create: (data) => http.post('/api/vehicles', data),
+    update: (id, data) => http.put(`/api/vehicles/${id}`, data),
+    remove: (id) => http.del(`/api/vehicles/${id}`),
+    addRecord: (id, data) => http.post(`/api/vehicles/${id}/records`, data),
+    updateRecord: (id, rid, data) => http.put(`/api/vehicles/${id}/records/${rid}`, data),
+    removeRecord: (id, rid) => http.del(`/api/vehicles/${id}/records/${rid}`),
+  },
+  // The household finance agent (ai-agent/), reached through the backend
+  // so the household is resolved from the login rather than sent by us.
+  ai: {
+    capabilities: () => http.get('/api/ai/capabilities'),
+    // Deterministic figures — no model, no cost. Safe on a page load.
+    analysis: (capability, params = {}) => {
+      const q = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      ).toString();
+      return http.get(`/api/ai/analysis/${encodeURIComponent(capability)}` + (q ? `?${q}` : ''));
+    },
+    // Runs the agent. Slow and billed. `signal` cancels an in-flight run.
+    run: (capability, body = {}, signal) =>
+      http.post(`/api/ai/${encodeURIComponent(capability)}`, body, signal ? { signal } : undefined),
+    // The chat. `history` is what was said earlier in this conversation —
+    // the agent keeps no state, so follow-ups only work if we send it.
+    ask: (question, history = [], signal) =>
+      http.post('/api/ai/ask', { question, history }, signal ? { signal } : undefined),
   },
   debts: {
     list: () => http.get('/api/debts'),

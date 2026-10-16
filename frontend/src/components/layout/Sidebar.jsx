@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
   { to: '/', end: true, icon: 'dashboard', label: 'Dashboard' },
+  { to: '/assistant', icon: 'assistant', label: 'Assistant' },
   { to: '/add', icon: 'plus', label: 'Add Transaction' },
   { to: '/transactions', icon: 'list', label: 'Transactions' },
   { to: '/accounts', icon: 'card', label: 'Accounts & Cards' },
@@ -12,6 +13,7 @@ const NAV = [
   { to: '/budgets', icon: 'budget', label: 'Budgets' },
   { to: '/goals', icon: 'goal', label: 'Goals' },
   { to: '/portfolio', icon: 'portfolio', label: 'Portfolio' },
+  { to: '/garage', icon: 'garage', label: 'Garage' },
   { to: '/rewards', icon: 'rewards', label: 'Rewards' },
   { to: '/tools', icon: 'tools', label: 'Tools' },
   { to: '/family', icon: 'family', label: 'Family' },

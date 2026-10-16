@@ -14,6 +14,7 @@ const EMPTY = {
   goals: [],
   investments: [],
   debts: [],
+  vehicles: [],
   budget: { monthlyBudget: 0, categories: [] },
   rewards: null,
   referrals: null,
@@ -41,6 +42,7 @@ export function DataProvider({ children }) {
         goals,
         investments,
         debts,
+        vehicles,
         budget,
         rewards,
         referrals,
@@ -53,6 +55,10 @@ export function DataProvider({ children }) {
         api.goals.list(),
         api.investments.list(),
         api.debts.list(),
+        api.vehicles.list().catch((e) => {
+          console.error('Garage unavailable', e);
+          return [];
+        }),
         api.budget.get(),
         // Coins move whenever transactions or goals do, so rewards ride
         // along on the same refresh instead of the page polling. Rewards
@@ -79,6 +85,7 @@ export function DataProvider({ children }) {
         goals,
         investments,
         debts,
+        vehicles,
         budget,
         rewards,
         referrals,
@@ -183,11 +190,31 @@ export function DataProvider({ children }) {
         run(() => api.investments.create(payload), `${payload.name} added · +25 coins`),
       updateInvestment: (id, payload) => run(() => api.investments.update(id, payload), 'Investment updated'),
       removeInvestment: (id) => run(() => api.investments.remove(id), 'Investment removed'),
+      withdrawInvestment: (id, payload) =>
+        run(
+          () => api.investments.withdraw(id, payload),
+          'Withdrawn — credit logged on Transactions'
+        ),
+      reinvestInvestment: (id, payload) =>
+        run(
+          () => api.investments.reinvest(id, payload),
+          payload.addOnAmount > 0
+            ? 'Reinvested — only the add-on logged on Transactions'
+            : 'Reinvested — matured amount rolled over, no extra transaction'
+        ),
 
       // debts
       addDebt: (payload) => run(() => api.debts.create(payload), `${payload.name} added`),
       updateDebt: (id, payload) => run(() => api.debts.update(id, payload), 'Debt updated'),
       removeDebt: (id) => run(() => api.debts.remove(id), 'Debt removed'),
+
+      addVehicle: (payload) => run(() => api.vehicles.create(payload), `${payload.name} added`),
+      updateVehicle: (id, payload) => run(() => api.vehicles.update(id, payload), 'Vehicle updated'),
+      removeVehicle: (id) => run(() => api.vehicles.remove(id), 'Vehicle removed'),
+      addVehicleRecord: (id, payload) => run(() => api.vehicles.addRecord(id, payload), 'Record added'),
+      updateVehicleRecord: (id, rid, payload) =>
+        run(() => api.vehicles.updateRecord(id, rid, payload), 'Record updated'),
+      removeVehicleRecord: (id, rid) => run(() => api.vehicles.removeRecord(id, rid), 'Record removed'),
     }),
     [run, refresh]
   );

@@ -55,9 +55,12 @@ export async function request(path, opts = {}) {
   return res.json();
 }
 
+// `opts` is spread into fetch, so a caller can pass an AbortSignal. The
+// assistant needs one: an agent run takes tens of seconds and a person
+// who changes their mind should not have to wait it out.
 export const http = {
-  get: (path) => request(path),
-  post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  get: (path, opts) => request(path, opts),
+  post: (path, body, opts) => request(path, { method: 'POST', body: JSON.stringify(body ?? {}), ...opts }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   del: (path) => request(path, { method: 'DELETE' }),

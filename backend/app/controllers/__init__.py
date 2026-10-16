@@ -3,6 +3,7 @@ schema. No business rules live here."""
 from fastapi import APIRouter
 
 from app.controllers.account_controller import router as account_router
+from app.controllers.ai_controller import router as ai_router
 from app.controllers.auth_controller import router as auth_router
 from app.controllers.budget_controller import router as budget_router
 from app.controllers.category_controller import router as category_router
@@ -14,6 +15,7 @@ from app.controllers.member_controller import router as member_router
 from app.controllers.referral_controller import router as referral_router
 from app.controllers.rewards_controller import router as rewards_router
 from app.controllers.transaction_controller import router as transaction_router
+from app.controllers.vehicle_controller import router as vehicle_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth_router)
@@ -28,6 +30,8 @@ api_router.include_router(investment_router)
 api_router.include_router(debt_router)
 api_router.include_router(rewards_router)
 api_router.include_router(referral_router)
+api_router.include_router(vehicle_router)
+api_router.include_router(ai_router)
 
 
 @api_router.get("/health", tags=["meta"])

@@ -35,5 +35,12 @@ class Investment(SQLModel, table=True):
     start_date: str = ""             # YYYY-MM-DD
     maturity_date: str = ""          # YYYY-MM-DD, optional
     notes: str = ""
+    # A closed holding is no longer an asset — its proceeds went to a
+    # bank (withdrawal) or into a successor holding (reinvest). The row
+    # stays so contribution history is still inspectable.
+    closed: bool = False
+    closed_at: str = ""              # YYYY-MM-DD
+    closed_to_account: str = ""      # Account.name the proceeds landed in
+    successor_id: Optional[int] = Field(default=None)
     created_at: str = ""
     updated_at: Optional[str] = None

@@ -23,7 +23,12 @@ from app.repositories.repositories import (
 )
 from app.services import portfolio_math
 from app.services.errors import NotFoundError, ValidationError
-from app.models.transaction import LOAN_PAYMENT_TYPES, TYPE_LOAN_PARTIAL
+from app.models.transaction import (
+    INVESTMENT_LINK_TYPES,
+    LOAN_PAYMENT_TYPES,
+    TYPE_INVESTMENT,
+    TYPE_LOAN_PARTIAL,
+)
 from app.services.portfolio_math import DebtView, InvestmentView
 
 
@@ -39,7 +44,7 @@ class PortfolioService:
         by_investment: dict[int, list[Transaction]] = {}
         by_debt: dict[int, list[Transaction]] = {}
         for txn in self.transactions.portfolio_linked(household_id):
-            if txn.type == "Investment" and txn.investment_id:
+            if txn.type == TYPE_INVESTMENT and txn.investment_id:
                 by_investment.setdefault(txn.investment_id, []).append(txn)
             elif txn.type in LOAN_PAYMENT_TYPES and txn.debt_id:
                 by_debt.setdefault(txn.debt_id, []).append(txn)
@@ -90,6 +95,7 @@ class PortfolioService:
         txn_type: str,
         investment_id: Optional[int],
         debt_id: Optional[int],
+        existing_investment_id: Optional[int] = None,
     ) -> tuple[Optional[int], Optional[int]]:
         """Check a transaction's portfolio links and return the pair that
         should actually be stored.
@@ -104,9 +110,19 @@ class PortfolioService:
         keep_investment: Optional[int] = None
         keep_debt: Optional[int] = None
 
-        if investment_id and txn_type == "Investment":
-            if not self.investments.get(household_id, investment_id):
+        if investment_id and txn_type in INVESTMENT_LINK_TYPES:
+            inv = self.investments.get(household_id, investment_id)
+            if not inv:
                 raise ValidationError("That investment doesn't exist")
+            # Fresh contributions cannot target a closed holding. Editing
+            # an existing linked row (the SIPs that built it) still can,
+            # so contribution history remains correctable after close.
+            if (
+                txn_type == TYPE_INVESTMENT
+                and inv.closed
+                and investment_id != existing_investment_id
+            ):
+                raise ValidationError("That investment is closed")
             keep_investment = investment_id
         if txn_type == TYPE_LOAN_PARTIAL and not debt_id:
             raise ValidationError("Pick the loan this partial payment pays down")

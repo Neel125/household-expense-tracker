@@ -44,6 +44,14 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "household": {
         "referral_code": "TEXT NOT NULL DEFAULT ''",
     },
+    # Close / reinvest. Existing holdings stay open; closed_at and the
+    # destination account are blank until a withdrawal is recorded.
+    "investment": {
+        "closed": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "closed_at": "TEXT NOT NULL DEFAULT ''",
+        "closed_to_account": "TEXT NOT NULL DEFAULT ''",
+        "successor_id": "INTEGER",
+    },
 }
 
 

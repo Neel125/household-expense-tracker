@@ -148,12 +148,13 @@ export default function DashboardPage() {
   );
 
   // ------------------------------------------------------------- portfolio
-  const portfolioValue = investments.reduce((a, i) => a + (i.effectiveValue || 0), 0);
-  const portfolioInvested = investments.reduce((a, i) => a + (i.totalInvested || 0), 0);
+  const openHoldings = investments.filter((i) => !i.isClosed);
+  const portfolioValue = openHoldings.reduce((a, i) => a + (i.effectiveValue || 0), 0);
+  const portfolioInvested = openHoldings.reduce((a, i) => a + (i.totalInvested || 0), 0);
   const portfolioGain = portfolioValue - portfolioInvested;
   const allocation = useMemo(() => {
     const buckets = new Map();
-    for (const inv of investments) {
+    for (const inv of openHoldings) {
       const v = Number(inv.effectiveValue) || 0;
       if (v <= 0) continue;
       buckets.set(inv.kind, (buckets.get(inv.kind) || 0) + v);
@@ -347,7 +348,7 @@ export default function DashboardPage() {
           <SectionHead title="Building wealth" hint="what the money has turned into" />
           <div className="grid two-col">
             {investments.length > 0 ? (
-              <Card title="Portfolio" hint={`${investments.length} holding${investments.length === 1 ? '' : 's'}`}>
+              <Card title="Portfolio" hint={`${openHoldings.length} holding${openHoldings.length === 1 ? '' : 's'}`}>
                 <div className="card-pad">
                   <div className="mini-stats mini-stats-3">
                     <div>

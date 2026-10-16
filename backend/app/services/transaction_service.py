@@ -11,13 +11,22 @@ from sqlmodel import Session
 
 from app.models import Transaction
 from app.models.mixins import now_iso
+from app.models.transaction import TYPE_INVESTMENT_WITHDRAWAL
 from app.repositories.repositories import TransactionRepository
 from app.schemas.transaction import TransactionIn
 from app.services import events
 from app.services.errors import NotFoundError, ValidationError
 from app.services.portfolio_service import PortfolioService
 
-_TYPES = {"Expense", "Investment", "Loan", "Loan Partial", "CC Repayment", "Income"}
+_TYPES = {
+    "Expense",
+    "Investment",
+    TYPE_INVESTMENT_WITHDRAWAL,
+    "Loan",
+    "Loan Partial",
+    "CC Repayment",
+    "Income",
+}
 # Only day-to-day spending is "tracking an expense". A CC repayment or an
 # income line is bookkeeping the app largely derives, so neither earns the
 # logging coin.
@@ -77,7 +86,11 @@ class TransactionService:
         was_trackable = txn.type == _TRACKABLE
         previous_debt_id = txn.debt_id
         investment_id, debt_id = self.portfolio.validate_links(
-            household_id, data.type, data.investment_id, data.debt_id
+            household_id,
+            data.type,
+            data.investment_id,
+            data.debt_id,
+            existing_investment_id=txn.investment_id,
         )
         txn.date = data.date
         txn.name = data.name.strip()

@@ -11,6 +11,15 @@ function isLoanOutflow(t) {
   return t.type === 'Loan' || t.type === 'Loan Partial';
 }
 
+// Credits a bank/cash/debit running balance without being household income.
+function isBankCredit(t) {
+  return t.type === 'Income' || t.type === 'Investment Withdrawal';
+}
+
+function isNotSpend(t) {
+  return t.type === 'CC Repayment' || isBankCredit(t);
+}
+
 export function inScope(list, scope, profile) {
   return scope === 'mine' && profile ? list.filter((t) => t.member === profile) : list;
 }
@@ -41,10 +50,10 @@ export function thisMonthKey(today = new Date()) {
 // The shared arithmetic: hand it any set of transactions (a month, a
 // person, a person's month) and it applies the accrual-vs-cash rules once.
 function aggregate(list) {
-  const spendable = list.filter((t) => t.type !== 'CC Repayment' && t.type !== 'Income');
+  const spendable = list.filter((t) => !isNotSpend(t));
   const accrual = sum(spendable);
   const cashOutflow =
-    sum(list.filter((t) => t.type !== 'CC Repayment' && t.type !== 'Income' && t.paymentMode !== 'Credit Card')) +
+    sum(list.filter((t) => !isNotSpend(t) && t.paymentMode !== 'Credit Card')) +
     sum(list.filter((t) => t.type === 'CC Repayment'));
   const stillOnCC = sum(list.filter((t) => t.paymentMode === 'Credit Card' && t.type !== 'CC Repayment'));
   const ccRepaid = sum(list.filter((t) => t.type === 'CC Repayment'));
@@ -160,10 +169,10 @@ export function computeAccountBalance(transactions, account) {
     const paid = sum(transactions.filter((t) => isLoanOutflow(t) && t.account === account.name));
     return { balance: 0, paid, kind: 'loan' };
   }
-  const credits = sum(transactions.filter((t) => t.type === 'Income' && t.providerType === account.name));
+  const credits = sum(transactions.filter((t) => isBankCredit(t) && t.providerType === account.name));
   const debits = sum(
     transactions.filter(
-      (t) => t.providerType === account.name && t.type !== 'Income' && t.paymentMode !== 'Credit Card'
+      (t) => t.providerType === account.name && !isBankCredit(t) && t.paymentMode !== 'Credit Card'
     )
   );
   return { balance: (account.openingBalance || 0) + credits - debits, credits, debits, kind: account.type };

@@ -1,7 +1,13 @@
 import { fmtINR, shortDate } from '../../lib/format';
 import Pill from '../ui/Pill';
 
-const TYPE_TONE = { Income: 'good', 'CC Repayment': 'debt', Loan: 'debt', 'Loan Partial': 'debt' };
+const TYPE_TONE = {
+  Income: 'good',
+  'Investment Withdrawal': 'good',
+  'CC Repayment': 'debt',
+  Loan: 'debt',
+  'Loan Partial': 'debt',
+};
 
 // Shared by the Transactions and Family views. showMember=false drops the
 // "Who" column. A categories map (id -> {name,color}) renders category
@@ -48,6 +54,7 @@ export default function TransactionTable({
           {transactions.map((t) => {
             const cat = t.categoryId ? categoriesById[t.categoryId] : null;
             const isIncome = t.type === 'Income';
+            const isCredit = isIncome || t.type === 'Investment Withdrawal';
             return (
               <tr key={t.id}>
                 <td className="mono cell-date">
@@ -59,23 +66,32 @@ export default function TransactionTable({
                   {t.merchant && <span className="note"> · {t.merchant}</span>}
                   {t.type === 'Loan Partial' && <span className="note"> · partial</span>}
                   {t.type === 'Loan' && <span className="note"> · EMI</span>}
+                  {t.type === 'Investment Withdrawal' && <span className="note"> · withdrawn</span>}
                   <span className="row-tag">
                     {isIncome ? (
                       <Pill tone="good">Income</Pill>
+                    ) : t.type === 'Investment Withdrawal' ? (
+                      <Pill tone="good">Withdrawal</Pill>
                     ) : (
                       <Pill necessity={t.necessity} />
                     )}
                   </span>
                 </td>
-                <td className="col-3">{cat ? cat.name : isIncome ? '—' : <span className="note">Uncategorized</span>}</td>
+                <td className="col-3">{cat ? cat.name : isCredit ? '—' : <span className="note">Uncategorized</span>}</td>
                 <td className="col-2">{t.paymentMode}</td>
                 <td className="col-3">{t.providerType}</td>
                 <td className="col-1">
-                  {isIncome ? <Pill tone="good">Income</Pill> : <Pill necessity={t.necessity} />}
+                  {isIncome ? (
+                    <Pill tone="good">Income</Pill>
+                  ) : t.type === 'Investment Withdrawal' ? (
+                    <Pill tone={TYPE_TONE['Investment Withdrawal']}>In</Pill>
+                  ) : (
+                    <Pill necessity={t.necessity} />
+                  )}
                 </td>
                 {showMember && <td className="col-2">{t.member || <span className="note">untagged</span>}</td>}
-                <td className={'num' + (isIncome ? ' amount-income' : '')}>
-                  {isIncome ? '+' : ''}
+                <td className={'num' + (isCredit ? ' amount-income' : '')}>
+                  {isCredit ? '+' : ''}
                   {fmtINR(t.amount)}
                 </td>
                 <td className="cell-actions">

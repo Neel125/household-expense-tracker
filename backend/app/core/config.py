@@ -42,6 +42,28 @@ class Settings:
 
         self.seed_data: bool = os.environ.get("SEED_DATA", "false").lower() == "true"
 
+        # The household finance agent (ai-agent/). Optional: leave the
+        # URL or the token unset and /api/ai/* answers 503 while the rest
+        # of the app carries on. The token must match the agent's own
+        # AGENT_SERVICE_TOKEN.
+        self.agent_service_url: str = os.environ.get("AGENT_SERVICE_URL", "")
+        self.agent_service_token: str = os.environ.get("AGENT_SERVICE_TOKEN", "")
+        # Two budgets, because the two halves cost wildly different
+        # amounts of time: /analysis is arithmetic over a loaded snapshot,
+        # /agent is a multi-step model run. The run budget is generous
+        # because the model is a local Ollama one — several steps on
+        # consumer hardware, with no provider throughput to rely on — and
+        # it must stay above the agent's own AGENT_TIMEOUT_SECONDS, or
+        # this side hangs up on a run that was about to answer.
+        self.agent_analysis_timeout: float = float(
+            os.environ.get("AGENT_ANALYSIS_TIMEOUT", "20")
+        )
+        self.agent_run_timeout: float = float(os.environ.get("AGENT_RUN_TIMEOUT", "300"))
+
+    @property
+    def agent_configured(self) -> bool:
+        return bool(self.agent_service_url and self.agent_service_token)
+
     @property
     def cors_origins(self) -> list[str]:
         if self.allowed_origins == "*":

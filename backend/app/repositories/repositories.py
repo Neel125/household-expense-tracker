@@ -22,8 +22,10 @@ from app.models import (
     Referral,
     Transaction,
     User,
+    Vehicle,
+    VehicleRecord,
 )
-from app.models.transaction import LOAN_PAYMENT_TYPES
+from app.models.transaction import INVESTMENT_LINK_TYPES, LOAN_PAYMENT_TYPES, TYPE_INVESTMENT
 from app.repositories.base import HouseholdRepository
 
 
@@ -46,7 +48,18 @@ class TransactionRepository(HouseholdRepository[Transaction]):
         stmt = select(Transaction).where(
             Transaction.household_id == household_id,
             Transaction.investment_id == investment_id,
-            Transaction.type == "Investment",
+            Transaction.type == TYPE_INVESTMENT,
+        )
+        return self.session.exec(stmt).all()
+
+    def ledger_for_investment(self, household_id: int, investment_id: int) -> Sequence[Transaction]:
+        """Every row linked to a holding, including the withdrawal that
+        closed it. Valuation still uses `for_investment` (contributions
+        only); this is the history the Portfolio modal shows."""
+        stmt = select(Transaction).where(
+            Transaction.household_id == household_id,
+            Transaction.investment_id == investment_id,
+            Transaction.type.in_(INVESTMENT_LINK_TYPES),
         )
         return self.session.exec(stmt).all()
 
@@ -65,7 +78,7 @@ class TransactionRepository(HouseholdRepository[Transaction]):
         stmt = select(Transaction).where(
             Transaction.household_id == household_id,
             or_(
-                and_(Transaction.investment_id.is_not(None), Transaction.type == "Investment"),
+                and_(Transaction.investment_id.is_not(None), Transaction.type == TYPE_INVESTMENT),
                 and_(
                     Transaction.debt_id.is_not(None),
                     Transaction.type.in_(LOAN_PAYMENT_TYPES),
@@ -143,6 +156,32 @@ class InvestmentRepository(HouseholdRepository[Investment]):
 class DebtRepository(HouseholdRepository[Debt]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, Debt)
+
+
+class VehicleRepository(HouseholdRepository[Vehicle]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, Vehicle)
+
+
+class VehicleRecordRepository(HouseholdRepository[VehicleRecord]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, VehicleRecord)
+
+    def for_vehicle(self, household_id: int, vehicle_id: int) -> Sequence[VehicleRecord]:
+        stmt = (
+            select(VehicleRecord)
+            .where(
+                VehicleRecord.household_id == household_id,
+                VehicleRecord.vehicle_id == vehicle_id,
+            )
+            .order_by(VehicleRecord.date.desc(), VehicleRecord.id.desc())
+        )
+        return self.session.exec(stmt).all()
+
+    def delete_for_vehicle(self, household_id: int, vehicle_id: int) -> None:
+        for row in self.for_vehicle(household_id, vehicle_id):
+            self.session.delete(row)
+        self.session.commit()
 
 
 class CoinTransactionRepository(HouseholdRepository[CoinTransaction]):

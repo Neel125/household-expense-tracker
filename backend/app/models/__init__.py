@@ -18,6 +18,7 @@ from app.models.reward import (
 )
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.vehicle import Vehicle, VehicleRecord
 
 __all__ = [
     "Account",
@@ -36,4 +37,6 @@ __all__ = [
     "Referral",
     "Transaction",
     "User",
+    "Vehicle",
+    "VehicleRecord",
 ]

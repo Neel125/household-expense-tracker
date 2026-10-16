@@ -8,6 +8,14 @@ TYPE_LOAN = "Loan"
 TYPE_LOAN_PARTIAL = "Loan Partial"
 LOAN_PAYMENT_TYPES = (TYPE_LOAN, TYPE_LOAN_PARTIAL)
 
+TYPE_INVESTMENT = "Investment"
+# Money coming *back* from a holding into a bank/cash account. Credits
+# the account like Income, but is not household income and is not spend.
+TYPE_INVESTMENT_WITHDRAWAL = "Investment Withdrawal"
+INVESTMENT_LINK_TYPES = (TYPE_INVESTMENT, TYPE_INVESTMENT_WITHDRAWAL)
+# Types that increase a bank / cash / debit running balance.
+BANK_CREDIT_TYPES = ("Income", TYPE_INVESTMENT_WITHDRAWAL)
+
 
 class Transaction(SQLModel, table=True):
     """One financial entry. The credit-card accrual rules that the
@@ -19,7 +27,8 @@ class Transaction(SQLModel, table=True):
     household_id: int = Field(index=True, foreign_key="household.id")
     date: str  # "YYYY-MM-DD"
     name: str
-    # Expense | Investment | Loan | Loan Partial | CC Repayment | Income
+    # Expense | Investment | Investment Withdrawal | Loan | Loan Partial |
+    # CC Repayment | Income
     type: str
     amount: float
     payment_mode: str = ""  # UPI | Credit Card | Cash | Auto Debit | Debit Card | ...

@@ -91,6 +91,11 @@ class InvestmentView:
     value_is_manual: bool
     gain: float
     gain_pct: float
+    # Set when the holding is closed: what it was worth at close, so the
+    # row can still show a figure after effective_value has been zeroed
+    # (otherwise net worth would count both the bank credit and the asset).
+    closed_value: float = 0
+    is_closed: bool = False
     contributions: list[Contribution] = field(default_factory=list)
 
     @property
@@ -139,17 +144,26 @@ def view_investment(
     total_invested = opening + contributed
     manual = float(investment.current_value or 0)
     value_is_manual = manual > 0
-    effective = manual if value_is_manual else projected
-    gain = effective - total_invested
+    live_value = manual if value_is_manual else projected
+    closed = bool(getattr(investment, "closed", False))
+    # Closed holdings are no longer assets — the proceeds sit in a bank
+    # (or in a successor holding). Keep the pre-close figure on the view
+    # so the row can say what was withdrawn.
+    effective = 0.0 if closed else live_value
+    closed_value = live_value if closed else 0.0
+    gain_from = closed_value if closed else effective
+    gain = gain_from - total_invested
     return InvestmentView(
         opening_invested=round(opening, 2),
         contributed=round(contributed, 2),
         total_invested=round(total_invested, 2),
         projected_value=round(projected, 2),
         effective_value=round(effective, 2),
-        value_is_manual=value_is_manual,
+        value_is_manual=value_is_manual and not closed,
         gain=round(gain, 2),
         gain_pct=round(gain / total_invested * 100, 2) if total_invested > 0 else 0.0,
+        closed_value=round(closed_value, 2),
+        is_closed=closed,
         contributions=contributions,
     )
 

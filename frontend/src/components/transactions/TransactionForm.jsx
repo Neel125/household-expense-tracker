@@ -8,6 +8,7 @@ const TYPES = [
   { value: 'Expense', label: 'Expense' },
   { value: 'Income', label: 'Income' },
   { value: 'Investment', label: 'Investment' },
+  { value: 'Investment Withdrawal', label: 'Investment withdrawal' },
   { value: 'Loan', label: 'Loan EMI' },
   { value: 'Loan Partial', label: 'Loan partial payment' },
   { value: 'CC Repayment', label: 'CC Repayment' },
@@ -92,9 +93,11 @@ export default function TransactionForm({
   }
 
   const isIncome = form.type === 'Income';
+  const isWithdrawal = form.type === 'Investment Withdrawal';
+  const isCredit = isIncome || isWithdrawal;
   const isLoanPartial = form.type === 'Loan Partial';
   const showSettle = form.type === 'CC Repayment' || form.type === 'Loan' || isLoanPartial;
-  const showInvestmentLink = form.type === 'Investment';
+  const showInvestmentLink = form.type === 'Investment' || isWithdrawal;
   const showDebtLink = form.type === 'Loan' || isLoanPartial;
 
   const providerOptions = useMemo(
@@ -115,6 +118,14 @@ export default function TransactionForm({
   const openDebts = useMemo(
     () => debts.filter((d) => !d.isClosed || String(d.id) === String(form.debtId)),
     [debts, form.debtId]
+  );
+  const linkableInvestments = useMemo(
+    () =>
+      investments.filter(
+        (i) =>
+          !i.isClosed || isWithdrawal || String(i.id) === String(form.investmentId)
+      ),
+    [investments, isWithdrawal, form.investmentId]
   );
   const selectedDebt = useMemo(
     () => debts.find((d) => String(d.id) === String(form.debtId)),
@@ -139,7 +150,7 @@ export default function TransactionForm({
       amount: Number(form.amount) || 0,
       paymentMode: form.paymentMode,
       providerType: form.providerType || '',
-      necessity: isIncome ? '' : form.necessity,
+      necessity: isCredit ? '' : form.necessity,
       account: showSettle ? form.account : '',
       member: form.member || defaultMember || '',
       categoryId: form.categoryId ? Number(form.categoryId) : null,
@@ -163,7 +174,13 @@ export default function TransactionForm({
         <Field label={isIncome ? 'Income name' : 'Name'}>
           <input
             type="text"
-            placeholder={isIncome ? 'e.g. Salary, Bonus' : 'e.g. Bike fuel'}
+            placeholder={
+              isIncome
+                ? 'e.g. Salary, Bonus'
+                : isWithdrawal
+                  ? 'e.g. SBI FD — withdrawn'
+                  : 'e.g. Bike fuel'
+            }
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
             required
@@ -187,16 +204,16 @@ export default function TransactionForm({
         <Field label="Payment mode">
           <Select value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)} options={PAYMENT_MODES} />
         </Field>
-        <Field label={isIncome ? 'Deposited to' : 'Paid from / provider'}>
+        <Field label={isCredit ? 'Deposited to' : 'Paid from / provider'}>
           <Select value={form.providerType} onChange={(e) => set('providerType', e.target.value)} placeholder="—" options={providerOptions} />
         </Field>
 
-        {!isIncome && (
+        {!isCredit && (
           <Field label="Necessity">
             <Select value={form.necessity} onChange={(e) => set('necessity', e.target.value)} options={NECESSITIES} />
           </Field>
         )}
-        {!isIncome && (
+        {!isCredit && (
           <Field label="Category">
             <Select value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)} placeholder="Uncategorized">
               {activeCategories.map((c) => (
@@ -225,9 +242,11 @@ export default function TransactionForm({
           <Field
             label="Adds to investment"
             hint={
-              investments.length
-                ? 'Optional. Linking adds this amount to the holding on the Portfolio page.'
-                : 'Add a holding on the Portfolio page first.'
+              isWithdrawal
+                ? 'The holding this money came out of.'
+                : investments.length
+                  ? 'Optional. Linking adds this amount to the holding on the Portfolio page.'
+                  : 'Add a holding on the Portfolio page first.'
             }
           >
             <Select
@@ -235,9 +254,10 @@ export default function TransactionForm({
               onChange={(e) => set('investmentId', e.target.value)}
               placeholder="— not linked —"
             >
-              {investments.map((i) => (
+              {linkableInvestments.map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name}
+                  {i.isClosed ? ' · closed' : ''}
                 </option>
               ))}
             </Select>

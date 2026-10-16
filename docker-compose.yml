@@ -39,7 +39,69 @@ services:
       # Set to "true" to load the sample data on first start
       # (demo@ledger.app / demo1234).
       SEED_DATA: "true"
+      # Where the household finance agent lives, and the shared secret
+      # the two services authenticate with. Both must be set for
+      # /api/ai/* to work; leave either blank and those endpoints answer
+      # 503 while the rest of the app carries on as normal.
+      AGENT_SERVICE_URL: "http://ai-agent:8100"
+      AGENT_SERVICE_TOKEN: "${AGENT_SERVICE_TOKEN:-dev-shared-secret-change-me}"
+      # A local model on CPU is slower than a hosted one; this must stay
+      # above the agent's own AGENT_TIMEOUT_SECONDS or the backend gives
+      # up on a run that was about to answer.
+      AGENT_RUN_TIMEOUT: "600"
+    restart: unless-stopped
+
+  ai-agent:
+    build: ./ai-agent
+    image: ledger-ai-agent
+    container_name: ledger-ai-agent
+    depends_on:
+      db:
+        condition: service_healthy
+    # Not published to the host: the agent can read every household's
+    # books, so it is reachable only from the app container on the
+    # compose network. Uncomment to poke at http://127.0.0.1:8100/docs.
+    ports:
+      - "8100:8100"
+    environment:
+      # The same database the backend writes to, opened read-only — the
+      # agent pins every Postgres session to READ ONLY at connect time.
+      DATABASE_URL: postgresql://ledger:ledger@db:5432/ledger
+      AGENT_SERVICE_TOKEN: "${AGENT_SERVICE_TOKEN:-dev-shared-secret-change-me}"
+      # The model runs on Ollama, on your own machine — the household's
+      # figures are never sent to a vendor. By default this points at the
+      # Ollama you already run on the host; set OLLAMA_BASE_URL to
+      # http://ollama:11434 to use the containerised one below instead.
+      OLLAMA_BASE_URL: http://ollama:11434
+      # Must be a tool-calling model: `ollama pull llama3.1:8b` first.
+      AGENT_MODEL: "${AGENT_MODEL:-llama3.1:8b}"
+      AGENT_NUM_CTX: "${AGENT_NUM_CTX:-16384}"
+      AGENT_TIMEOUT_SECONDS: "600"
+    extra_hosts:
+      # Linux has no host.docker.internal of its own; this adds it, so the
+      # same OLLAMA_BASE_URL works on Linux, macOS and Windows.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Optional: an Ollama in the compose network, for a host that has none.
+  # It is off by default because most machines already run one, and a
+  # second copy would download the weights again. Start it with:
+  #   docker compose --profile ollama up -d
+  # then set OLLAMA_BASE_URL=http://ollama:11434 and pull a model with:
+  #   docker compose exec ollama ollama pull llama3.1:8b
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ledger-ollama
+    profiles: ["ollama"]
+    volumes:
+      - ollama-models:/root/.ollama
+    # Deliberately not published to the host. The agent reaches it by name
+    # on the compose network, and a machine that already runs its own
+    # Ollama — the common case — holds 11434, so publishing it here only
+    # produces a port clash. Add a mapping to a free port (e.g.
+    # "11500:11434") if you want to reach this one from the host.
     restart: unless-stopped
 
 volumes:
   ledger-pg:
+  ollama-models:

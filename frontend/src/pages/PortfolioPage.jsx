@@ -24,6 +24,19 @@ import {
 } from '../lib/portfolioMeta';
 import { useData } from '../context/DataContext';
 
+const TODAY = () => new Date().toISOString().slice(0, 10);
+
+function depositAccounts(accounts) {
+  return (accounts || []).filter(
+    (a) => !a.archived && ['bank', 'debit_card', 'cash'].includes(a.type)
+  );
+}
+
+function isMatured(inv) {
+  const d = (inv.maturityDate || '').slice(0, 10);
+  return Boolean(d && d <= TODAY());
+}
+
 // ------------------------------------------------------------ blank templates
 const BLANK_INVESTMENT = {
   id: null,
@@ -281,25 +294,210 @@ function DebtScheduleModal({ debt, onClose }) {
   );
 }
 
+function WithdrawModal({ investment, accounts, members, defaultMember, onSave, onClose }) {
+  const banks = depositAccounts(accounts);
+  const [form, setForm] = useState({
+    date: TODAY(),
+    amount: investment.effectiveValue || '',
+    accountName: banks[0]?.name || '',
+    member: defaultMember || '',
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.accountName) {
+      alert('Pick the bank account that receives the money');
+      return;
+    }
+    setBusy(true);
+    const ok = await onSave({
+      date: form.date,
+      amount: Number(form.amount) || 0,
+      accountName: form.accountName,
+      member: form.member,
+    });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Modal title={`Withdraw ${investment.name}`} onClose={onClose} size="form">
+      <form onSubmit={submit}>
+        <p className="note" style={{ marginTop: 0 }}>
+          Closes this holding and logs an <strong>Investment Withdrawal</strong> on
+          Transactions, crediting the selected account. That is not income — it is money
+          coming back from the investment.
+        </p>
+        <div className="form-grid">
+          <Field label="Date">
+            <input type="date" value={form.date} onChange={set('date')} required />
+          </Field>
+          <Field label="Amount (₹)" hint="Defaults to today’s value. Change it for a penalty or extra interest.">
+            <input type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} required />
+          </Field>
+          <Field label="Transfer to">
+            <Select
+              value={form.accountName}
+              onChange={set('accountName')}
+              placeholder={banks.length ? 'Select account' : 'Add a bank account first'}
+              options={banks.map((a) => ({ value: a.name, label: a.name }))}
+            />
+          </Field>
+          <Field label="Logged by">
+            <Select
+              value={form.member}
+              onChange={set('member')}
+              placeholder="—"
+              options={members.map((m) => m.name)}
+            />
+          </Field>
+        </div>
+        <div className="form-actions">
+          <Button type="submit" variant="primary" disabled={busy || !banks.length}>
+            Withdraw and close
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ReinvestModal({ investment, accounts, members, defaultMember, onSave, onClose }) {
+  const banks = depositAccounts(accounts);
+  const [form, setForm] = useState({
+    date: TODAY(),
+    amount: investment.effectiveValue || '',
+    addOnAmount: '',
+    accountName: banks[0]?.name || '',
+    newName: `${investment.name} (renewed)`,
+    newMaturityDate: '',
+    annualReturnPct: investment.annualReturnPct || '',
+    member: defaultMember || '',
+    notes: '',
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const proceeds = Number(form.amount) || 0;
+  const addOn = Number(form.addOnAmount) || 0;
+  const total = proceeds + addOn;
+
+  async function submit(e) {
+    e.preventDefault();
+    if (addOn > 0 && !form.accountName) {
+      alert('Pick the bank account the add-on is paid from');
+      return;
+    }
+    if (total <= 0) {
+      alert('Reinvest needs the matured value or an add-on amount');
+      return;
+    }
+    setBusy(true);
+    const ok = await onSave({
+      date: form.date,
+      amount: proceeds,
+      addOnAmount: addOn,
+      accountName: form.accountName,
+      newName: form.newName.trim(),
+      newMaturityDate: form.newMaturityDate,
+      annualReturnPct: form.annualReturnPct === '' ? undefined : Number(form.annualReturnPct) || 0,
+      member: form.member,
+      notes: form.notes.trim(),
+    });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Modal title={`Reinvest ${investment.name}`} onClose={onClose} size="form">
+      <form onSubmit={submit}>
+        <p className="note" style={{ marginTop: 0 }}>
+          The matured amount stays invested as the new holding’s opening — no transaction
+          for that rollover. Only an add-on is logged on Transactions, as extra money
+          leaving the selected account.
+        </p>
+        <div className="form-grid">
+          <Field label="Date">
+            <input type="date" value={form.date} onChange={set('date')} required />
+          </Field>
+          <Field label="Matured proceeds (₹)">
+            <input type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} required />
+          </Field>
+          <Field label="Add-on from bank (₹)" hint="Extra money invested on renewal. Leave 0 to roll the proceeds only.">
+            <input type="number" min="0" step="0.01" value={form.addOnAmount} onChange={set('addOnAmount')} />
+          </Field>
+          <Field label="New principal">
+            <input value={fmtINR(total)} readOnly />
+          </Field>
+          <Field
+            label="Add-on paid from"
+            hint={addOn > 0 ? 'Required. Only this extra amount is debited from the account.' : 'Needed only if you add extra money.'}
+          >
+            <Select
+              value={form.accountName}
+              onChange={set('accountName')}
+              placeholder={banks.length ? 'Select account' : 'Add a bank account first'}
+              options={banks.map((a) => ({ value: a.name, label: a.name }))}
+            />
+          </Field>
+          <Field label="New name">
+            <input value={form.newName} onChange={set('newName')} required />
+          </Field>
+          <Field label="New maturity date">
+            <input type="date" value={form.newMaturityDate} onChange={set('newMaturityDate')} />
+          </Field>
+          <Field label="Expected return (% p.a.)">
+            <input type="number" step="0.1" value={form.annualReturnPct} onChange={set('annualReturnPct')} />
+          </Field>
+          <Field label="Logged by">
+            <Select
+              value={form.member}
+              onChange={set('member')}
+              placeholder="—"
+              options={members.map((m) => m.name)}
+            />
+          </Field>
+          <Field label="Notes" className="span-3">
+            <input value={form.notes} onChange={set('notes')} placeholder="optional" />
+          </Field>
+        </div>
+        <div className="form-actions">
+          <Button type="submit" variant="primary" disabled={busy || (addOn > 0 && !banks.length)}>
+            Reinvest {addOn > 0 ? `with ${fmtINR(addOn)} add-on` : 'and close'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function ContributionsModal({ investment, onClose }) {
   const { loading, error, data } = useDetail(
     () => api.investments.get(investment.id),
     investment.id
   );
-  const rows = data?.contributions || [];
+  const ledger = data?.ledger?.length ? data.ledger : (data?.contributions || []).map((r) => ({
+    ...r,
+    kind: 'contribution',
+    providerType: '',
+  }));
   const inv = data?.investment;
+  const withdrawn = ledger.filter((r) => r.kind === 'withdrawal').reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const paidIn = ledger.filter((r) => r.kind !== 'withdrawal').reduce((a, r) => a + (Number(r.amount) || 0), 0);
   return (
-    <Modal title={`${investment.name} — contributions`} onClose={onClose} wide>
+    <Modal title={`${investment.name} — history`} onClose={onClose} wide>
       <p className="note">
-        Every Investment transaction linked to this holding, and what each one is worth today
-        at {investment.annualReturnPct || 0}% p.a.
-        {investment.valueIsManual && ' Your own valuation is being used instead of the projection.'}
+        Every transaction logged against this holding — contributions in, withdrawals out,
+        and any add-on at renewal. These also appear on the Transactions page.
       </p>
       {loading ? (
-        <EmptyState>Loading contributions…</EmptyState>
+        <EmptyState>Loading history…</EmptyState>
       ) : error ? (
         <EmptyState>{error}</EmptyState>
-      ) : rows.length === 0 ? (
+      ) : ledger.length === 0 ? (
         <EmptyState>Nothing linked to this holding yet.</EmptyState>
       ) : (
         <>
@@ -309,28 +507,42 @@ function ContributionsModal({ investment, onClose }) {
                 <tr>
                   <th>Date</th>
                   <th>What</th>
-                  <th style={{ textAlign: 'right' }}>Paid in</th>
-                  <th style={{ textAlign: 'right' }}>Worth now</th>
+                  <th>Account</th>
+                  <th style={{ textAlign: 'right' }}>In</th>
+                  <th style={{ textAlign: 'right' }}>Out</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.transactionId}>
-                    <td className="cell-date note">{shortDate(r.date)}</td>
-                    <td>{r.name}</td>
-                    <td className="num" style={{ textAlign: 'right' }}>{fmtINR(r.amount)}</td>
-                    <td className="num up-good" style={{ textAlign: 'right' }}>{fmtINR(r.grownTo)}</td>
-                  </tr>
-                ))}
+                {ledger.map((r) => {
+                  const out = r.kind === 'withdrawal';
+                  return (
+                    <tr key={r.transactionId}>
+                      <td className="cell-date note">{shortDate(r.date)}</td>
+                      <td>
+                        {r.name}
+                        <span className="note"> · {out ? 'withdrawal' : r.name?.includes('add-on') ? 'add-on' : 'contribution'}</span>
+                      </td>
+                      <td className="note">{r.providerType || '—'}</td>
+                      <td className="num" style={{ textAlign: 'right' }}>{out ? '' : fmtINR(r.amount)}</td>
+                      <td className={'num' + (out ? ' amount-income' : '')} style={{ textAlign: 'right' }}>
+                        {out ? `+${fmtINR(r.amount)}` : ''}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
           <div className="earn-row" style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
             <span className="note">
-              {rows.length} contribution{rows.length === 1 ? '' : 's'}
-              {inv?.amountInvested > 0 && <> plus {fmtINR(inv.amountInvested)} opening</>}
+              {ledger.length} transaction{ledger.length === 1 ? '' : 's'}
+              {inv?.amountInvested > 0 && <> · {fmtINR(inv.amountInvested)} opening</>}
             </span>
-            <span className="num">{fmtINR(inv?.totalInvested)} invested</span>
+            <span className="num">
+              {paidIn > 0 && <>in {fmtINR(paidIn)}</>}
+              {paidIn > 0 && withdrawn > 0 && ' · '}
+              {withdrawn > 0 && <span className="amount-income">out {fmtINR(withdrawn)}</span>}
+            </span>
           </div>
         </>
       )}
@@ -341,12 +553,14 @@ function ContributionsModal({ investment, onClose }) {
 // -------------------------------------------------------------- list items
 // Every figure below `invested` comes from the backend, which sums the
 // linked Investment transactions and grows each one from its own date.
-function InvestmentRow({ inv, onEdit, onDelete, onHistory }) {
+function InvestmentRow({ inv, onEdit, onDelete, onHistory, onWithdraw, onReinvest }) {
   const meta = INV_META[inv.kind] || INV_META.other;
   const tone = inv.gain > 0 ? 'up-good' : inv.gain < 0 ? 'up-bad' : '';
   const linked = inv.contributionCount > 0;
+  const closed = inv.isClosed;
+  const matured = !closed && isMatured(inv);
   return (
-    <div className="asset-row">
+    <div className={'asset-row' + (closed ? ' is-closed' : '')}>
       <div className="asset-icon" style={{ background: INV_COLORS[inv.kind] || 'var(--accent-wash)' }}>
         {meta.icon}
       </div>
@@ -354,13 +568,35 @@ function InvestmentRow({ inv, onEdit, onDelete, onHistory }) {
         <div className="asset-title">
           {inv.name}
           <span className="asset-kind"><Pill>{meta.label}</Pill></span>
-          {linked && <span className="asset-kind"><Pill tone="good">auto</Pill></span>}
+          {closed && (
+            <span className="asset-kind">
+              <Pill tone="good">{inv.successorId ? 'reinvested' : 'closed'}</Pill>
+            </span>
+          )}
+          {matured && (
+            <span className="asset-kind"><Pill tone="warning">matured</Pill></span>
+          )}
+          {linked && !closed && <span className="asset-kind"><Pill tone="good">auto</Pill></span>}
         </div>
         <div className="note">
           {inv.institution || '—'}
           {inv.startDate && <> · started {shortDate(inv.startDate)}</>}
-          {inv.maturityDate && <> · matures {shortDate(inv.maturityDate)}</>}
+          {closed
+            ? inv.closedAt && <> · closed {shortDate(inv.closedAt)}</>
+            : inv.maturityDate && <> · matures {shortDate(inv.maturityDate)}</>}
         </div>
+        {closed && (
+          <div className="note" style={{ marginTop: 4 }}>
+            {fmtINR(inv.closedValue)} transferred
+            {inv.closedToAccount ? <> to {inv.closedToAccount}</> : ''}
+            {inv.successorId ? ' and rolled into a new holding' : ''}
+          </div>
+        )}
+        {matured && (
+          <div className="note" style={{ marginTop: 4 }}>
+            Matured — withdraw to a bank or reinvest with an add-on.
+          </div>
+        )}
         {linked && (
           <div className="note" style={{ marginTop: 4 }}>
             {inv.contributionCount} logged contribution{inv.contributionCount === 1 ? '' : 's'} ·{' '}
@@ -371,19 +607,27 @@ function InvestmentRow({ inv, onEdit, onDelete, onHistory }) {
         )}
       </div>
       <div className="asset-figures">
-        <div className="asset-value">{fmtINR(inv.effectiveValue)}</div>
+        <div className="asset-value">{fmtINR(closed ? inv.closedValue : inv.effectiveValue)}</div>
         <div className={'note ' + tone}>
           {inv.gain >= 0 ? '+' : '−'}{fmtINR(Math.abs(inv.gain))} (
           {inv.gainPct >= 0 ? '+' : ''}{Number(inv.gainPct).toFixed(1)}%)
         </div>
         <div className="note">invested {fmtINR(inv.totalInvested)}</div>
-        <div className="note">{inv.valueIsManual ? 'your valuation' : 'projected'}</div>
+        <div className="note">
+          {closed ? 'closed' : inv.valueIsManual ? 'your valuation' : 'projected'}
+        </div>
       </div>
       <div className="asset-actions">
-        {linked && (
-          <Button size="sm" variant="ghost" onClick={onHistory}>Contributions</Button>
+        {!closed && (
+          <>
+            <Button size="sm" variant="ghost" onClick={onWithdraw}>Withdraw</Button>
+            <Button size="sm" variant="ghost" onClick={onReinvest}>Reinvest</Button>
+          </>
         )}
-        <Button size="sm" variant="ghost" onClick={onEdit}>Edit</Button>
+        {(linked || closed) && (
+          <Button size="sm" variant="ghost" onClick={onHistory}>History</Button>
+        )}
+        {!closed && <Button size="sm" variant="ghost" onClick={onEdit}>Edit</Button>}
         <Button size="sm" variant="danger" onClick={onDelete}>Remove</Button>
       </div>
     </div>
@@ -455,9 +699,14 @@ export default function PortfolioPage() {
   const {
     investments,
     debts,
+    accounts,
+    members,
+    profile,
     addInvestment,
     updateInvestment,
     removeInvestment,
+    withdrawInvestment,
+    reinvestInvestment,
     addDebt,
     updateDebt,
     removeDebt,
@@ -467,16 +716,29 @@ export default function PortfolioPage() {
   const [confirmRemove, setConfirmRemove] = useState(null); // {kind, id, name}
   const [schedule, setSchedule] = useState(null); // a debt, for the EMI split
   const [contributions, setContributions] = useState(null); // an investment
+  const [withdrawInv, setWithdrawInv] = useState(null);
+  const [reinvestInv, setReinvestInv] = useState(null);
+
+  const openInvestments = useMemo(
+    () => investments.filter((i) => !i.isClosed),
+    [investments]
+  );
+  const listedInvestments = useMemo(
+    () => [...openInvestments, ...investments.filter((i) => i.isClosed)],
+    [investments, openInvestments]
+  );
 
   // `totalInvested` and `effectiveValue` already fold in every linked
   // transaction, so these totals move the moment an SIP or EMI is logged.
+  // Closed holdings are excluded: their value now sits in a bank (or in
+  // the successor holding), and counting both would double net worth.
   const totalInvested = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.totalInvested) || 0), 0),
-    [investments]
+    () => openInvestments.reduce((a, i) => a + (Number(i.totalInvested) || 0), 0),
+    [openInvestments]
   );
   const totalValue = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.effectiveValue) || 0), 0),
-    [investments]
+    () => openInvestments.reduce((a, i) => a + (Number(i.effectiveValue) || 0), 0),
+    [openInvestments]
   );
   const totalGain = totalValue - totalInvested;
   const totalDebt = useMemo(
@@ -484,8 +746,8 @@ export default function PortfolioPage() {
     [debts]
   );
   const autoContributed = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.contributed) || 0), 0),
-    [investments]
+    () => openInvestments.reduce((a, i) => a + (Number(i.contributed) || 0), 0),
+    [openInvestments]
   );
   const principalRepaid = useMemo(
     () => debts.reduce((a, d) => a + (Number(d.principalRepaid) || 0), 0),
@@ -500,15 +762,15 @@ export default function PortfolioPage() {
     [debts]
   );
   const monthlyContribution = useMemo(
-    () => investments.reduce((a, i) => a + (Number(i.monthlyContribution) || 0), 0),
-    [investments]
+    () => openInvestments.reduce((a, i) => a + (Number(i.monthlyContribution) || 0), 0),
+    [openInvestments]
   );
   const netWorth = totalValue - totalDebt;
 
   // Investment mix — donut by kind (aggregated).
   const investmentMix = useMemo(() => {
     const buckets = new Map();
-    for (const inv of investments) {
+    for (const inv of openInvestments) {
       const v = Number(inv.effectiveValue) || 0;
       if (v <= 0) continue;
       buckets.set(inv.kind, (buckets.get(inv.kind) || 0) + v);
@@ -518,7 +780,7 @@ export default function PortfolioPage() {
       value,
       color: INV_COLORS[kind] || '#94a3b8',
     }));
-  }, [investments]);
+  }, [openInvestments]);
 
   const debtBars = useMemo(
     () => debts.filter((d) => (Number(d.outstandingNow) || 0) > 0),
@@ -543,7 +805,7 @@ export default function PortfolioPage() {
     <section>
       <PageHeader
         title="Portfolio"
-        subtitle="Household assets and debts. Log an Investment transaction against a holding and it adds to the invested total; log a Loan EMI against a debt to split interest and principal, or a Loan partial payment to cut principal in full."
+        subtitle="Household assets and debts. Log an Investment transaction against a holding and it adds to the invested total. At maturity, withdraw the proceeds to a bank or reinvest with an add-on. Log a Loan EMI against a debt to split interest and principal, or a Loan partial payment to cut principal in full."
       />
 
       <div className="grid kpi-row">
@@ -618,7 +880,7 @@ export default function PortfolioPage() {
       <div className="grid two-col-even" style={{ marginTop: 16 }}>
         <Card
           title="Investments"
-          hint={`${investments.length} item${investments.length === 1 ? '' : 's'}`}
+          hint={`${openInvestments.length} open · ${investments.length} total`}
           actions={
             <Button size="sm" variant="primary" onClick={() => setInvModal({ ...BLANK_INVESTMENT })}>
               + Add investment
@@ -632,7 +894,7 @@ export default function PortfolioPage() {
               </EmptyState>
             ) : (
               <div className="asset-list">
-                {investments.map((inv) => (
+                {listedInvestments.map((inv) => (
                   <InvestmentRow
                     key={inv.id}
                     inv={inv}
@@ -652,6 +914,8 @@ export default function PortfolioPage() {
                       })
                     }
                     onHistory={() => setContributions(inv)}
+                    onWithdraw={() => setWithdrawInv(inv)}
+                    onReinvest={() => setReinvestInv(inv)}
                     onDelete={() => setConfirmRemove({ kind: 'investment', id: inv.id, name: inv.name })}
                   />
                 ))}
@@ -724,6 +988,26 @@ export default function PortfolioPage() {
       {schedule && <DebtScheduleModal debt={schedule} onClose={() => setSchedule(null)} />}
       {contributions && (
         <ContributionsModal investment={contributions} onClose={() => setContributions(null)} />
+      )}
+      {withdrawInv && (
+        <WithdrawModal
+          investment={withdrawInv}
+          accounts={accounts}
+          members={members}
+          defaultMember={profile}
+          onSave={(payload) => withdrawInvestment(withdrawInv.id, payload)}
+          onClose={() => setWithdrawInv(null)}
+        />
+      )}
+      {reinvestInv && (
+        <ReinvestModal
+          investment={reinvestInv}
+          accounts={accounts}
+          members={members}
+          defaultMember={profile}
+          onSave={(payload) => reinvestInvestment(reinvestInv.id, payload)}
+          onClose={() => setReinvestInv(null)}
+        />
       )}
       {confirmRemove && (
         <Modal

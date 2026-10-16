@@ -5,6 +5,9 @@ from sqlmodel import Field, SQLModel
 # Account kinds. Credit cards keep the existing accrual/repayment
 # reconciliation; banks/cash/debit hold a running balance.
 ACCOUNT_TYPES = {"bank", "debit_card", "credit_card", "cash", "loan"}
+# Places an investment's maturity proceeds can land (and that an add-on
+# at renewal can be paid from). Credit cards and loans are not wallets.
+DEPOSIT_ACCOUNT_TYPES = {"bank", "debit_card", "cash"}
 
 
 class Account(SQLModel, table=True):
